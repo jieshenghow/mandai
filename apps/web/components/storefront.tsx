@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, money } from "@/lib/products";
 import { cartKey, type Cart, type StoreProduct } from "@/lib/commerce";
+import { useAccount } from "./workspace";
 import { Feedback, Status } from "./product-ui";
 
 export const freshQueries = {
@@ -47,6 +48,7 @@ export function ProductPicture({
     );
 }
 function AddToCart({ product }: { product: StoreProduct }) {
+    const user = useAccount();
     const [quantity, setQuantity] = useState(1);
     const [added, setAdded] = useState(false);
     const client = useQueryClient();
@@ -68,6 +70,9 @@ function AddToCart({ product }: { product: StoreProduct }) {
             await client.invalidateQueries({ queryKey: ["store-products"] });
         },
     });
+    if (user === undefined) return <p className="mt-5 text-text-subtle">Loading account…</p>;
+    if (user === null) return <Link href="/login" className="btn mt-5">Sign in to shop</Link>;
+    if (user.role === "ADMIN") return <p className="mt-5 text-text-subtle">Administrator account · browsing only</p>;
     return (
         <form
             onSubmit={(event) => {

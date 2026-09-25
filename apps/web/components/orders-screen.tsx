@@ -6,18 +6,19 @@ import { api, money, time } from "@/lib/products";
 import type { Order, OrderPage } from "@/lib/commerce";
 import { Feedback } from "./product-ui";
 import { freshQueries } from "./storefront";
-export function OrdersScreen() {
+export function OrdersScreen({ admin = false }: { admin?: boolean }) {
+    const base = admin ? "/admin/orders" : "/orders";
     const [page, setPage] = useState(1);
     const query = useQuery({
-        queryKey: ["orders", page],
-        queryFn: () => api<OrderPage>(`/api/orders?page=${page}`),
+        queryKey: [base, page],
+        queryFn: () => api<OrderPage>(`/api${base}?page=${page}`),
         ...freshQueries,
     });
     return (
         <>
-            <h1 className="text-3xl font-semibold">Your orders</h1>
+            <h1 className="text-3xl font-semibold">{admin ? "All orders" : "Your orders"}</h1>
             <p className="mb-8 mt-3 text-text-subtle">
-                A record of your purchases.
+                {admin ? "Read-only customer purchase history." : "A record of your purchases."}
             </p>
             <Feedback error={query.error} />
             {query.isPending && <p role="status">Loading orders…</p>}
@@ -32,7 +33,7 @@ export function OrdersScreen() {
             <div className="space-y-4">
                 {query.data?.items.map((order) => (
                     <Link
-                        href={`/orders/${order.id}`}
+                        href={`${base}/${order.id}`}
                         key={order.id}
                         className="block rounded-xl border border-border bg-surface-1 p-5 hover:bg-surface-2"
                     >
@@ -42,6 +43,7 @@ export function OrdersScreen() {
                             </span>
                             <strong>{money(order.totalAmountCents)}</strong>
                         </div>
+                        {admin && <p className="mt-2 break-all text-sm">{order.customerEmail}</p>}
                         <p className="mt-2 text-sm text-text-subtle">
                             {time(order.createdAt)} ·{" "}
                             {order.items.reduce((n, i) => n + i.quantity, 0)}{" "}
@@ -81,16 +83,17 @@ export function OrdersScreen() {
         </>
     );
 }
-export function OrderDetails({ id }: { id: string }) {
+export function OrderDetails({ id, admin = false }: { id: string; admin?: boolean }) {
+    const base = admin ? "/admin/orders" : "/orders";
     const query = useQuery({
-        queryKey: ["orders", id],
-        queryFn: () => api<Order>(`/api/orders/${id}`),
+        queryKey: [base, id],
+        queryFn: () => api<Order>(`/api${base}/${id}`),
         ...freshQueries,
     });
     const order = query.data;
     return (
         <>
-            <Link href="/orders" className="text-text-subtle">
+            <Link href={base} className="text-text-subtle">
                 ← All orders
             </Link>
             <Feedback error={query.error} />
@@ -103,7 +106,7 @@ export function OrderDetails({ id }: { id: string }) {
                 <section className="mt-8 rounded-xl border border-border bg-surface-1 p-6 sm:p-8">
                     <p className="text-sm text-emerald-300">Order confirmed</p>
                     <h1 className="mt-3 text-3xl font-semibold">
-                        Thank you for your order.
+                        {admin ? "Order details" : "Thank you for your order."}
                     </h1>
                     <p className="mt-4 break-all text-sm text-text-subtle">
                         Order {order.id}
@@ -111,6 +114,7 @@ export function OrderDetails({ id }: { id: string }) {
                     <p className="mt-1 text-sm text-text-subtle">
                         {time(order.createdAt)}
                     </p>
+                    {admin && <p className="mt-3 break-all">Customer: {order.customerEmail}</p>}
                     <div className="mt-8 divide-y divide-border">
                         {order.items.map((i) => (
                             <div
@@ -136,8 +140,7 @@ export function OrderDetails({ id }: { id: string }) {
                         <span>{money(order.totalAmountCents)}</span>
                     </div>
                     <p className="mt-5 text-sm text-text-subtle">
-                        Your purchase is complete. No payment was collected for
-                        this demo.
+                        {admin ? "Purchase completed. This order is read-only." : "Your purchase is complete. No payment was collected for this demo."}
                     </p>
                     <Link href="/" className="btn mt-6">
                         Continue shopping

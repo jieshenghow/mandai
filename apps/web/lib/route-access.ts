@@ -12,13 +12,20 @@ export function routeGroup(pathname: string): "auth" | "app" | "admin" {
     return "app";
 }
 
+export function isPublicCatalog(pathname: string) {
+    const path = pathname.replace(/\/+$/, "") || "/";
+    return path === "/" || /^\/products\/[^/]+$/.test(path);
+}
+
 export function redirectFor(
     pathname: string,
     role: Role | null,
 ): string | null {
     const group = routeGroup(pathname);
     if (group === "auth") return role ? homeFor(role) : null;
+    if (isPublicCatalog(pathname)) return null;
     if (!role) return "/login";
+    if (role === "ADMIN" && /^\/(cart|orders)(\/|$)/.test(pathname)) return "/admin";
     if (group === "admin" && role !== "ADMIN") return "/";
     return null;
 }

@@ -1,12 +1,16 @@
 "use client";
 import Link from "next/link";
-import {useEffect, useState, type ReactNode} from "react";
-import type {User} from "@/lib/route-access";
+import {useEffect, useState, createContext, useContext, type ReactNode} from "react";
+import {isPublicCatalog, type User} from "@/lib/route-access";
+import {usePathname} from "next/navigation";
+const AccountContext = createContext<User | null | undefined>(undefined);
+export const useAccount = () => useContext(AccountContext);
 import {useMutation, useQueryClient} from "@tanstack/react-query";
 import {postApi} from "@/lib/api";
 
 export function Workspace({admin = false, children, section = "Overview"}: { admin?: boolean; children?: ReactNode; section?: string }) {
-    const [user, setUser] = useState<User | null>(null);
+    const [user, setUser] = useState<User | null | undefined>(undefined);
+    const publicCatalog = isPublicCatalog(usePathname());
     const [error, setError] = useState("");
     const queryClient = useQueryClient();
     const logoutMutation = useMutation({
@@ -24,7 +28,8 @@ export function Workspace({admin = false, children, section = "Overview"}: { adm
         fetch("/api/auth/me", {cache: "no-store", signal: controller.signal})
             .then(async (response) => {
                 if (response.status === 401) {
-                    window.location.replace("/login");
+                    if (!publicCatalog) window.location.replace("/login");
+                    setUser(null);
                     return;
                 }
                 if (!response.ok)
@@ -42,9 +47,9 @@ export function Workspace({admin = false, children, section = "Overview"}: { adm
                 if (!controller.signal.aborted) setError(cause.message);
             });
         return () => controller.abort();
-    }, [admin]);
+    }, [admin, publicCatalog]);
     return (
-        <div className="flex min-h-svh max-[641px]:flex-col">
+        <AccountContext.Provider value={user}><div className="flex min-h-svh max-[641px]:flex-col">
             {admin && (
                 <aside
                     className="flex w-58 shrink-0 flex-col gap-3 border-r border-border bg-surface-1 px-4 py-6 max-[641px]:w-full max-[641px]:gap-2 max-[641px]:border-r-0 max-[641px]:border-b max-[641px]:p-4">
@@ -68,9 +73,10 @@ export function Workspace({admin = false, children, section = "Overview"}: { adm
                         Overview
                     </Link>
                     <Link href="/admin/products" className="rounded-lg px-3 py-2.5 text-text-muted aria-[current=page]:bg-surface-2" aria-current={section === "Products" ? "page" : undefined}>Products</Link>
+                    <Link href="/admin/orders" className="rounded-lg px-3 py-2.5 text-text-muted aria-[current=page]:bg-surface-2" aria-current={section === "Orders" ? "page" : undefined}>Orders</Link>
                     <Link href="/admin/product-logs" className="rounded-lg px-3 py-2.5 text-text-muted aria-[current=page]:bg-surface-2" aria-current={section === "Product logs" ? "page" : undefined}>Product logs</Link>
                     <Link href="/" className="rounded-lg px-3 py-2.5 text-text-muted">
-                        Member workspace ↗
+                        Browse shop ↗
                     </Link>
                     <span className="mt-auto p-3 text-[12px] text-text-subtle max-[641px]:hidden">
             Inventory administration
@@ -84,17 +90,17 @@ export function Workspace({admin = false, children, section = "Overview"}: { adm
             {admin ? `Administration / ${section}` : `Mandai / ${section}`}
           </span>
                     <div className="flex flex-wrap items-center gap-4">
-                        {!admin && <nav aria-label="Store navigation" className="flex gap-4"><Link href="/" aria-current={section === "Collection" ? "page" : undefined}>Shop</Link><Link href="/cart" aria-current={section === "Cart" ? "page" : undefined}>Cart</Link><Link href="/orders" aria-current={section === "Orders" ? "page" : undefined}>Orders</Link></nav>}
+                        {!admin && <nav aria-label="Store navigation" className="flex gap-4"><Link href="/" aria-current={section === "Collection" ? "page" : undefined}>Shop</Link>{user?.role === "USER" && <><Link href="/cart" aria-current={section === "Cart" ? "page" : undefined}>Cart</Link><Link href="/orders" aria-current={section === "Orders" ? "page" : undefined}>Orders</Link></>}</nav>}
                         {user?.role === "ADMIN" && !admin && (
                             <Link href="/admin">Administration</Link>
                         )}
-                        <button
+                        {user ? <button
                             className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-border bg-surface-1 px-3.5 py-[9px] font-medium hover:bg-surface-2 disabled:cursor-wait disabled:opacity-60"
                             onClick={() => logoutMutation.mutate()}
                             disabled={pending}
                         >
                             {pending ? "Signing out…" : "Sign out"}
-                        </button>
+                        </button> : user === null ? <Link href="/login">Sign in</Link> : <span>Loading account…</span>}
                     </div>
                 </header>
                 <main className="mx-auto max-w-260 px-8 py-12 max-[641px]:px-4 max-[641px]:py-8">
@@ -159,6 +165,6 @@ export function Workspace({admin = false, children, section = "Overview"}: { adm
                     </>}
                 </main>
             </div>
-        </div>
+        </div></AccountContext.Provider>
     );
 }

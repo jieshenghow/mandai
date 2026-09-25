@@ -7,6 +7,7 @@ import { api, ApiError, money } from "@/lib/products";
 import {
     cartKey,
     checkoutItems,
+    cartBlocksCheckout,
     type Cart,
     type CartItem,
     type Checkout,
@@ -57,7 +58,7 @@ function CartRow({
                     {!item.available && (
                         <p className="mt-2 text-sm text-text-muted">
                             {item.unavailableReason}{" "}
-                            <strong>Excluded from checkout.</strong>
+                            <strong>Resolve this item before checking out.</strong>
                         </p>
                     )}
                 </div>
@@ -206,7 +207,9 @@ function LoadedCart({ cart }: { cart: Cart }) {
     const items = checkoutItems(cart);
     const busy = edit.isPending || checkout.isPending || checkout.isSuccess;
     const overLimit = cart.totalAmountCents > 1000000000;
+    const blocked = cartBlocksCheckout(cart);
     function submit() {
+        if (busy || (!pendingRequest && (blocked || overLimit || hasUnsavedEdits))) return;
         const input = pendingRequest ?? {
             requestId: crypto.randomUUID(),
             version: cart.version,
@@ -262,12 +265,12 @@ function LoadedCart({ cart }: { cart: Cart }) {
                         <h2 className="text-lg font-semibold">Order summary</h2>
                         <p className="mt-4 text-text-subtle">
                             {items.reduce((n, i) => n + i.quantity, 0)} items
-                            ready to checkout
+                            in your cart
                         </p>
                         {cart.items.some((i) => !i.available) && (
                             <p className="mt-3 text-sm text-text-subtle">
-                                Unavailable items stay in your cart and are
-                                excluded from this order.
+                                Checkout is blocked. Remove unavailable items or
+                                reduce quantities before placing the entire order.
                             </p>
                         )}
                         <div className="my-6 flex justify-between border-t border-border pt-5">
@@ -290,7 +293,7 @@ function LoadedCart({ cart }: { cart: Cart }) {
                             disabled={
                                 busy ||
                                 (!pendingRequest &&
-                                    (!items.length ||
+                                    (blocked ||
                                         overLimit ||
                                         hasUnsavedEdits))
                             }

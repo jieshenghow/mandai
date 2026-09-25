@@ -16,7 +16,9 @@ test("proxy checks identity, redirects before rendering, and fails closed", asyn
         return new Response(JSON.stringify({data: {role}}), {status});
     });
     const visit = (path: string, cookie = true) => proxy(new NextRequest(`http://localhost:3000${path}`, {headers: cookie ? {Cookie: "session=sample"} : {}}));
-    assert.equal((await visit("/", false)).headers.get("location"), "http://localhost:3000/login");
+    assert.equal((await visit("/", false)).status, 200);
+    assert.equal((await visit("/products/123", false)).status, 200);
+    assert.equal((await visit("/cart", false)).headers.get("location"), "http://localhost:3000/login");
     assert.equal((await visit("/login", false)).status, 200);
     assert.equal(calls, 0);
     assert.equal((await visit("/admin")).headers.get("location"), "http://localhost:3000/");

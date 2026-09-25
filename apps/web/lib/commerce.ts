@@ -19,6 +19,7 @@ export type Cart = {
 };
 export type Order = {
     id: string;
+    customerEmail?: string;
     createdAt: string;
     totalAmountCents: number;
     items: {
@@ -43,10 +44,13 @@ export type Checkout = {
 export const cartKey = ["cart"] as const;
 export function checkoutItems(cart: Cart): Checkout["items"] {
     return cart.items
-        .filter((i) => i.available)
         .map(({ productId, quantity, priceCents }) => ({
             productId,
             quantity,
             priceCents,
         }));
+}
+
+export function cartBlocksCheckout(cart: Cart): boolean {
+    return !cart.items.length || cart.items.some((i) => !i.available || i.archived || i.stock < i.quantity);
 }
