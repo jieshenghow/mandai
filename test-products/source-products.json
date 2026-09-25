@@ -1,0 +1,442 @@
+[
+  {
+    "sku": "TEST-011",
+    "name": "Ice Cream",
+    "description": "Sample listing for upload testing: Ice Cream.",
+    "price": 5.49,
+    "stock": 100,
+    "category": "groceries",
+    "images": [
+      "11-ice-cream/01.jpg",
+      "11-ice-cream/02.jpg",
+      "11-ice-cream/03.jpg",
+      "11-ice-cream/04.jpg",
+      "11-ice-cream/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/groceries/ice-cream/1.webp",
+      "https://cdn.dummyjson.com/product-images/groceries/ice-cream/2.webp",
+      "https://cdn.dummyjson.com/product-images/groceries/ice-cream/3.webp",
+      "https://cdn.dummyjson.com/product-images/groceries/ice-cream/4.webp",
+      "https://cdn.dummyjson.com/product-images/groceries/ice-cream/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-012",
+    "name": "Man Short Sleeve Shirt",
+    "description": "Sample listing for upload testing: Man Short Sleeve Shirt.",
+    "price": 19.99,
+    "stock": 100,
+    "category": "mens-shirts",
+    "images": [
+      "12-man-short-sleeve-shirt/01.jpg",
+      "12-man-short-sleeve-shirt/02.jpg",
+      "12-man-short-sleeve-shirt/03.jpg",
+      "12-man-short-sleeve-shirt/04.jpg",
+      "12-man-short-sleeve-shirt/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/mens-shirts/man-short-sleeve-shirt/1.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shirts/man-short-sleeve-shirt/2.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shirts/man-short-sleeve-shirt/3.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shirts/man-short-sleeve-shirt/4.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shirts/man-short-sleeve-shirt/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-013",
+    "name": "Men Check Shirt",
+    "description": "Sample listing for upload testing: Men Check Shirt.",
+    "price": 27.99,
+    "stock": 100,
+    "category": "mens-shirts",
+    "images": [
+      "13-men-check-shirt/01.jpg",
+      "13-men-check-shirt/02.jpg",
+      "13-men-check-shirt/03.jpg",
+      "13-men-check-shirt/04.jpg",
+      "13-men-check-shirt/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/mens-shirts/men-check-shirt/1.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shirts/men-check-shirt/2.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shirts/men-check-shirt/3.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shirts/men-check-shirt/4.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shirts/men-check-shirt/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-014",
+    "name": "Nike Baseball Cleats",
+    "description": "Sample listing for upload testing: Nike Baseball Cleats.",
+    "price": 79.99,
+    "stock": 100,
+    "category": "mens-shoes",
+    "images": [
+      "14-nike-baseball-cleats/01.jpg",
+      "14-nike-baseball-cleats/02.jpg",
+      "14-nike-baseball-cleats/03.jpg",
+      "14-nike-baseball-cleats/04.jpg",
+      "14-nike-baseball-cleats/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/mens-shoes/nike-baseball-cleats/1.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shoes/nike-baseball-cleats/2.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shoes/nike-baseball-cleats/3.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shoes/nike-baseball-cleats/4.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shoes/nike-baseball-cleats/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-015",
+    "name": "Sports Sneakers Off White & Red",
+    "description": "Sample listing for upload testing: Sports Sneakers Off White & Red.",
+    "price": 119.99,
+    "stock": 100,
+    "category": "mens-shoes",
+    "images": [
+      "15-sports-sneakers-off-white-red/01.jpg",
+      "15-sports-sneakers-off-white-red/02.jpg",
+      "15-sports-sneakers-off-white-red/03.jpg",
+      "15-sports-sneakers-off-white-red/04.jpg",
+      "15-sports-sneakers-off-white-red/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-&-red/1.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-&-red/2.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-&-red/3.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-&-red/4.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-&-red/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-016",
+    "name": "Sports Sneakers Off White Red",
+    "description": "Sample listing for upload testing: Sports Sneakers Off White Red.",
+    "price": 109.99,
+    "stock": 100,
+    "category": "mens-shoes",
+    "images": [
+      "16-sports-sneakers-off-white-red/01.jpg",
+      "16-sports-sneakers-off-white-red/02.jpg",
+      "16-sports-sneakers-off-white-red/03.jpg",
+      "16-sports-sneakers-off-white-red/04.jpg",
+      "16-sports-sneakers-off-white-red/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-red/1.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-red/2.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-red/3.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-red/4.webp",
+      "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-red/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-017",
+    "name": "Oppo K1",
+    "description": "Sample listing for upload testing: Oppo K1.",
+    "price": 299.99,
+    "stock": 100,
+    "category": "smartphones",
+    "images": [
+      "17-oppo-k1/01.jpg",
+      "17-oppo-k1/02.jpg",
+      "17-oppo-k1/03.jpg",
+      "17-oppo-k1/04.jpg",
+      "17-oppo-k1/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/smartphones/oppo-k1/1.webp",
+      "https://cdn.dummyjson.com/product-images/smartphones/oppo-k1/2.webp",
+      "https://cdn.dummyjson.com/product-images/smartphones/oppo-k1/3.webp",
+      "https://cdn.dummyjson.com/product-images/smartphones/oppo-k1/4.webp",
+      "https://cdn.dummyjson.com/product-images/smartphones/oppo-k1/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-018",
+    "name": "Cricket Helmet",
+    "description": "Sample listing for upload testing: Cricket Helmet.",
+    "price": 44.99,
+    "stock": 100,
+    "category": "sports-accessories",
+    "images": [
+      "18-cricket-helmet/01.jpg",
+      "18-cricket-helmet/02.jpg",
+      "18-cricket-helmet/03.jpg",
+      "18-cricket-helmet/04.jpg",
+      "18-cricket-helmet/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-helmet/1.webp",
+      "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-helmet/2.webp",
+      "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-helmet/3.webp",
+      "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-helmet/4.webp",
+      "https://cdn.dummyjson.com/product-images/sports-accessories/cricket-helmet/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-019",
+    "name": "iPad Mini 2021 Starlight",
+    "description": "Sample listing for upload testing: iPad Mini 2021 Starlight.",
+    "price": 499.99,
+    "stock": 100,
+    "category": "tablets",
+    "images": [
+      "19-ipad-mini-2021-starlight/01.jpg",
+      "19-ipad-mini-2021-starlight/02.jpg",
+      "19-ipad-mini-2021-starlight/03.jpg",
+      "19-ipad-mini-2021-starlight/04.jpg",
+      "19-ipad-mini-2021-starlight/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/tablets/ipad-mini-2021-starlight/1.webp",
+      "https://cdn.dummyjson.com/product-images/tablets/ipad-mini-2021-starlight/2.webp",
+      "https://cdn.dummyjson.com/product-images/tablets/ipad-mini-2021-starlight/3.webp",
+      "https://cdn.dummyjson.com/product-images/tablets/ipad-mini-2021-starlight/4.webp",
+      "https://cdn.dummyjson.com/product-images/tablets/ipad-mini-2021-starlight/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-020",
+    "name": "Samsung Galaxy Tab S8 Plus Grey",
+    "description": "Sample listing for upload testing: Samsung Galaxy Tab S8 Plus Grey.",
+    "price": 599.99,
+    "stock": 100,
+    "category": "tablets",
+    "images": [
+      "20-samsung-galaxy-tab-s8-plus-grey/01.jpg",
+      "20-samsung-galaxy-tab-s8-plus-grey/02.jpg",
+      "20-samsung-galaxy-tab-s8-plus-grey/03.jpg",
+      "20-samsung-galaxy-tab-s8-plus-grey/04.jpg",
+      "20-samsung-galaxy-tab-s8-plus-grey/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-s8-plus-grey/1.webp",
+      "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-s8-plus-grey/2.webp",
+      "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-s8-plus-grey/3.webp",
+      "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-s8-plus-grey/4.webp",
+      "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-s8-plus-grey/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-021",
+    "name": "Samsung Galaxy Tab White",
+    "description": "Sample listing for upload testing: Samsung Galaxy Tab White.",
+    "price": 349.99,
+    "stock": 100,
+    "category": "tablets",
+    "images": [
+      "21-samsung-galaxy-tab-white/01.jpg",
+      "21-samsung-galaxy-tab-white/02.jpg",
+      "21-samsung-galaxy-tab-white/03.jpg",
+      "21-samsung-galaxy-tab-white/04.jpg",
+      "21-samsung-galaxy-tab-white/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-white/1.webp",
+      "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-white/2.webp",
+      "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-white/3.webp",
+      "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-white/4.webp",
+      "https://cdn.dummyjson.com/product-images/tablets/samsung-galaxy-tab-white/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-022",
+    "name": "Blue Frock",
+    "description": "Sample listing for upload testing: Blue Frock.",
+    "price": 29.99,
+    "stock": 100,
+    "category": "tops",
+    "images": [
+      "22-blue-frock/01.jpg",
+      "22-blue-frock/02.jpg",
+      "22-blue-frock/03.jpg",
+      "22-blue-frock/04.jpg",
+      "22-blue-frock/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/tops/blue-frock/1.webp",
+      "https://cdn.dummyjson.com/product-images/tops/blue-frock/2.webp",
+      "https://cdn.dummyjson.com/product-images/tops/blue-frock/3.webp",
+      "https://cdn.dummyjson.com/product-images/tops/blue-frock/4.webp",
+      "https://cdn.dummyjson.com/product-images/tops/blue-frock/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-023",
+    "name": "Girl Summer Dress",
+    "description": "Sample listing for upload testing: Girl Summer Dress.",
+    "price": 19.99,
+    "stock": 100,
+    "category": "tops",
+    "images": [
+      "23-girl-summer-dress/01.jpg",
+      "23-girl-summer-dress/02.jpg",
+      "23-girl-summer-dress/03.jpg",
+      "23-girl-summer-dress/04.jpg",
+      "23-girl-summer-dress/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/tops/girl-summer-dress/1.webp",
+      "https://cdn.dummyjson.com/product-images/tops/girl-summer-dress/2.webp",
+      "https://cdn.dummyjson.com/product-images/tops/girl-summer-dress/3.webp",
+      "https://cdn.dummyjson.com/product-images/tops/girl-summer-dress/4.webp",
+      "https://cdn.dummyjson.com/product-images/tops/girl-summer-dress/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-024",
+    "name": "Gray Dress",
+    "description": "Sample listing for upload testing: Gray Dress.",
+    "price": 34.99,
+    "stock": 100,
+    "category": "tops",
+    "images": [
+      "24-gray-dress/01.jpg",
+      "24-gray-dress/02.jpg",
+      "24-gray-dress/03.jpg",
+      "24-gray-dress/04.jpg",
+      "24-gray-dress/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/tops/gray-dress/1.webp",
+      "https://cdn.dummyjson.com/product-images/tops/gray-dress/2.webp",
+      "https://cdn.dummyjson.com/product-images/tops/gray-dress/3.webp",
+      "https://cdn.dummyjson.com/product-images/tops/gray-dress/4.webp",
+      "https://cdn.dummyjson.com/product-images/tops/gray-dress/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-025",
+    "name": "Short Frock",
+    "description": "Sample listing for upload testing: Short Frock.",
+    "price": 24.99,
+    "stock": 100,
+    "category": "tops",
+    "images": [
+      "25-short-frock/01.jpg",
+      "25-short-frock/02.jpg",
+      "25-short-frock/03.jpg",
+      "25-short-frock/04.jpg",
+      "25-short-frock/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/tops/short-frock/1.webp",
+      "https://cdn.dummyjson.com/product-images/tops/short-frock/2.webp",
+      "https://cdn.dummyjson.com/product-images/tops/short-frock/3.webp",
+      "https://cdn.dummyjson.com/product-images/tops/short-frock/4.webp",
+      "https://cdn.dummyjson.com/product-images/tops/short-frock/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-026",
+    "name": "Tartan Dress",
+    "description": "Sample listing for upload testing: Tartan Dress.",
+    "price": 39.99,
+    "stock": 100,
+    "category": "tops",
+    "images": [
+      "26-tartan-dress/01.jpg",
+      "26-tartan-dress/02.jpg",
+      "26-tartan-dress/03.jpg",
+      "26-tartan-dress/04.jpg",
+      "26-tartan-dress/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/tops/tartan-dress/1.webp",
+      "https://cdn.dummyjson.com/product-images/tops/tartan-dress/2.webp",
+      "https://cdn.dummyjson.com/product-images/tops/tartan-dress/3.webp",
+      "https://cdn.dummyjson.com/product-images/tops/tartan-dress/4.webp",
+      "https://cdn.dummyjson.com/product-images/tops/tartan-dress/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-027",
+    "name": "Black Women's Gown",
+    "description": "Sample listing for upload testing: Black Women's Gown.",
+    "price": 129.99,
+    "stock": 100,
+    "category": "womens-dresses",
+    "images": [
+      "27-black-women-s-gown/01.jpg",
+      "27-black-women-s-gown/02.jpg",
+      "27-black-women-s-gown/03.jpg",
+      "27-black-women-s-gown/04.jpg",
+      "27-black-women-s-gown/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/womens-dresses/black-women's-gown/1.webp",
+      "https://cdn.dummyjson.com/product-images/womens-dresses/black-women's-gown/2.webp",
+      "https://cdn.dummyjson.com/product-images/womens-dresses/black-women's-gown/3.webp",
+      "https://cdn.dummyjson.com/product-images/womens-dresses/black-women's-gown/4.webp",
+      "https://cdn.dummyjson.com/product-images/womens-dresses/black-women's-gown/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-028",
+    "name": "Black & Brown Slipper",
+    "description": "Sample listing for upload testing: Black & Brown Slipper.",
+    "price": 19.99,
+    "stock": 100,
+    "category": "womens-shoes",
+    "images": [
+      "28-black-brown-slipper/01.jpg",
+      "28-black-brown-slipper/02.jpg",
+      "28-black-brown-slipper/03.jpg",
+      "28-black-brown-slipper/04.jpg",
+      "28-black-brown-slipper/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/womens-shoes/black-&-brown-slipper/1.webp",
+      "https://cdn.dummyjson.com/product-images/womens-shoes/black-&-brown-slipper/2.webp",
+      "https://cdn.dummyjson.com/product-images/womens-shoes/black-&-brown-slipper/3.webp",
+      "https://cdn.dummyjson.com/product-images/womens-shoes/black-&-brown-slipper/4.webp",
+      "https://cdn.dummyjson.com/product-images/womens-shoes/black-&-brown-slipper/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-029",
+    "name": "Calvin Klein Heel Shoes",
+    "description": "Sample listing for upload testing: Calvin Klein Heel Shoes.",
+    "price": 79.99,
+    "stock": 100,
+    "category": "womens-shoes",
+    "images": [
+      "29-calvin-klein-heel-shoes/01.jpg",
+      "29-calvin-klein-heel-shoes/02.jpg",
+      "29-calvin-klein-heel-shoes/03.jpg",
+      "29-calvin-klein-heel-shoes/04.jpg",
+      "29-calvin-klein-heel-shoes/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/womens-shoes/calvin-klein-heel-shoes/1.webp",
+      "https://cdn.dummyjson.com/product-images/womens-shoes/calvin-klein-heel-shoes/2.webp",
+      "https://cdn.dummyjson.com/product-images/womens-shoes/calvin-klein-heel-shoes/3.webp",
+      "https://cdn.dummyjson.com/product-images/womens-shoes/calvin-klein-heel-shoes/4.webp",
+      "https://cdn.dummyjson.com/product-images/womens-shoes/calvin-klein-heel-shoes/thumbnail.webp"
+    ]
+  },
+  {
+    "sku": "TEST-030",
+    "name": "Red Shoes",
+    "description": "Sample listing for upload testing: Red Shoes.",
+    "price": 34.99,
+    "stock": 100,
+    "category": "womens-shoes",
+    "images": [
+      "30-red-shoes/01.jpg",
+      "30-red-shoes/02.jpg",
+      "30-red-shoes/03.jpg",
+      "30-red-shoes/04.jpg",
+      "30-red-shoes/05.jpg"
+    ],
+    "source_urls": [
+      "https://cdn.dummyjson.com/product-images/womens-shoes/red-shoes/1.webp",
+      "https://cdn.dummyjson.com/product-images/womens-shoes/red-shoes/2.webp",
+      "https://cdn.dummyjson.com/product-images/womens-shoes/red-shoes/3.webp",
+      "https://cdn.dummyjson.com/product-images/womens-shoes/red-shoes/4.webp",
+      "https://cdn.dummyjson.com/product-images/womens-shoes/red-shoes/thumbnail.webp"
+    ]
+  }
+]

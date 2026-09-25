@@ -1,0 +1,7 @@
+Name: Gray Dress
+SKU: TEST-024
+Description: Sample listing for upload testing: Gray Dress.
+Sample price: 34.99
+Stock: 100
+Category: tops
+Images 01–04: gallery. Image 05: thumbnail.

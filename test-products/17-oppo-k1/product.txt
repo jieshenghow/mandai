@@ -1,0 +1,7 @@
+Name: Oppo K1
+SKU: TEST-017
+Description: Sample listing for upload testing: Oppo K1.
+Sample price: 299.99
+Stock: 100
+Category: smartphones
+Images 01–04: gallery. Image 05: thumbnail.

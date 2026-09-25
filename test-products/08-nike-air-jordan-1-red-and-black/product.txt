@@ -1,0 +1,7 @@
+Name: Nike Air Jordan 1 Red And Black
+SKU: TEST-008
+Description: Sample listing for upload testing: Nike Air Jordan 1 Red And Black.
+Sample price: 149.99
+Stock: 100
+Category: mens-shoes
+Images 01–04: gallery. Image 05: thumbnail.

@@ -1,0 +1,7 @@
+Name: Puma Future Rider Trainers
+SKU: TEST-009
+Description: Sample listing for upload testing: Puma Future Rider Trainers.
+Sample price: 89.99
+Stock: 100
+Category: mens-shoes
+Images 01–04: gallery. Image 05: thumbnail.

@@ -15,7 +15,8 @@
     "lint": "pnpm --filter @mandai/web lint",
     "typecheck": "pnpm --filter @mandai/api --filter @mandai/web typecheck",
     "db:seed": "pnpm --filter @mandai/api seed",
-    "test": "pnpm --filter @mandai/api --filter @mandai/web test"
+    "test": "pnpm --filter @mandai/api --filter @mandai/web test",
+    "db:seed:products": "pnpm --filter @mandai/api seed:products"
   },
   "devDependencies": {
     "dotenv": "^18.0.3",

@@ -1,0 +1,7 @@
+Name: Man Short Sleeve Shirt
+SKU: TEST-012
+Description: Sample listing for upload testing: Man Short Sleeve Shirt.
+Sample price: 19.99
+Stock: 100
+Category: mens-shirts
+Images 01–04: gallery. Image 05: thumbnail.

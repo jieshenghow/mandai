@@ -1,8 +1,9 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { readFile, readdir, mkdtemp, rm, access } from "node:fs/promises";
+import { readFile, readdir, mkdtemp, rm, access, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import pg from "pg";
 import request from "supertest";
 import sharp from "sharp";
@@ -27,6 +28,7 @@ for (const name of (await readdir(migrations))
 const { default: app } = await import("../src/app.ts");
 const { db } = await import("../src/db.ts");
 const { cleanupImages } = await import("../src/products.ts");
+const { seedProducts } = await import("../src/seed-products.ts");
 after(async () => {
     await db.$disconnect();
     await setup.end();
@@ -343,4 +345,69 @@ test("guest catalog includes sold-out products, excludes archives and keeps priv
     await request(app).get(image.url).expect(404);
     await admin.agent.patch(`/api/admin/products/${pictured.id}`).send({name: "Return"}).expect(404);
     await admin.agent.post(`/api/admin/products/${pictured.id}/stock-movements`).send({type: "IN", quantity: 1, reason: "Restock"}).expect(404);
+});
+
+test("demo product import preserves galleries, audit history and existing stock on concurrent reruns", async () => {
+    const manifest = fileURLToPath(new URL("../../../test-products/products.json", import.meta.url));
+    const fixtures = JSON.parse(await readFile(manifest, "utf8")) as {name: string; stock: number; priceCents: number; images: string[]}[];
+    const before = await db.product.count();
+    const results = await Promise.all([seedProducts(manifest), seedProducts(manifest)]);
+    assert.equal(results.reduce((sum, r) => sum + r.created, 0), fixtures.length);
+    assert.equal(results.reduce((sum, r) => sum + r.skipped, 0), fixtures.length);
+    assert.equal(await db.product.count(), before + fixtures.length);
+    const imported = await db.product.findMany({
+        where: {name: {in: fixtures.map((p) => p.name)}},
+        include: {images: {orderBy: {position: "asc"}}},
+    });
+    assert.equal(imported.length, fixtures.length);
+    const ids = imported.map((p) => p.id);
+    assert.equal(await db.productLog.count({where: {productId: {in: ids}, action: "CREATE"}}), fixtures.length);
+    assert.equal(await db.stockMovement.count({where: {productId: {in: ids}}}), fixtures.filter((p) => p.stock > 0).length);
+    for (const product of imported) {
+        const fixture = fixtures.find((p) => p.name === product.name)!;
+        assert.equal(product.priceCents, fixture.priceCents);
+        assert.equal(product.stock, fixture.stock);
+        assert.equal(product.images.length, fixture.images.length);
+        assert.equal(product.coverImageId, product.images[0]?.id ?? null);
+        for (const image of product.images) {
+            assert.equal((await sharp(join(process.env.UPLOAD_DIR!, image.filename)).metadata()).format, "webp");
+        }
+    }
+    await request(app).get(`/api/product-images/${imported[0].coverImageId}`).expect(200);
+    await db.product.update({where: {id: imported[0].id}, data: {stock: 0, name: "Edited demo product", deletedAt: new Date()}});
+    assert.deepEqual(await seedProducts(manifest), {created: 0, skipped: fixtures.length});
+    const preserved = await db.product.findUniqueOrThrow({where: {id: imported[0].id}});
+    assert.equal(preserved.stock, 0);
+    assert.equal(preserved.name, "Edited demo product");
+    assert.ok(preserved.deletedAt);
+    assert.equal(await db.productLog.count({where: {productId: {in: ids}}}), fixtures.length);
+});
+
+test("demo import validates all inputs before writes and cleans files after transaction failure", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "mandai-seed-"));
+    const manifest = join(folder, "products.json");
+    const fixture = {key: "rollback-fixture", ...base, images: ["image.png"]};
+    const count = await db.product.count();
+    try {
+        await writeFile(join(folder, "image.png"), png);
+        await writeFile(manifest, JSON.stringify([fixture, {...fixture, key: "missing-image", images: ["missing.png"]}]));
+        await assert.rejects(seedProducts(manifest), /ENOENT/);
+        assert.equal(await db.product.count(), count);
+        await writeFile(manifest, JSON.stringify([fixture, fixture]));
+        await assert.rejects(seedProducts(manifest), /Product keys must be unique/);
+        await writeFile(manifest, JSON.stringify([fixture]));
+        const files = (await readdir(process.env.UPLOAD_DIR!)).sort();
+        await setup.query(`CREATE FUNCTION seed_reject_log() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'seed audit failure'; END $$;
+            CREATE TRIGGER seed_reject_log BEFORE INSERT ON tbl_product_log FOR EACH ROW EXECUTE FUNCTION seed_reject_log();`);
+        try {
+            await assert.rejects(seedProducts(manifest));
+        } finally {
+            await setup.query('DROP TRIGGER seed_reject_log ON tbl_product_log; DROP FUNCTION seed_reject_log();');
+        }
+        assert.equal(await db.product.count(), count);
+        assert.deepEqual((await readdir(process.env.UPLOAD_DIR!)).sort(), files);
+        assert.deepEqual(await seedProducts(manifest), {created: 1, skipped: 0});
+    } finally {
+        await rm(folder, {recursive: true, force: true});
+    }
 });

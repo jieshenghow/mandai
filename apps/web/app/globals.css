@@ -2,7 +2,6 @@
 
 @theme {
     --font-sans: Inter, Geist, system-ui, sans-serif;
-    /* Palette from Stitch project 6844272699315330931. */
     --color-canvas: #fff8f5;
     --color-surface-1: #ffffff;
     --color-surface-2: #faf2ee;

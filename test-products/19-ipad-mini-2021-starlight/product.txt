@@ -1,0 +1,7 @@
+Name: iPad Mini 2021 Starlight
+SKU: TEST-019
+Description: Sample listing for upload testing: iPad Mini 2021 Starlight.
+Sample price: 499.99
+Stock: 100
+Category: tablets
+Images 01–04: gallery. Image 05: thumbnail.

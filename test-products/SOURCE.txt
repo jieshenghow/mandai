@@ -1,0 +1,7 @@
+20 ADDITIONAL UPLOAD TEST PRODUCTS
+100 JPEG images: 5 per product. SKUs TEST-011 through TEST-030.
+No products repeat from the first 10-product pack.
+Each folder contains four gallery images plus a thumbnail, which may repeat the main view at another resolution.
+Names, categories and sample prices from https://dummyjson.com/docs/products
+Descriptions and stock are test placeholders. Original source URLs are in products.json.
+Unzip, use product.txt for each listing, and upload its five JPEG files.

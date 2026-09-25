@@ -1,0 +1,7 @@
+Name: Short Frock
+SKU: TEST-025
+Description: Sample listing for upload testing: Short Frock.
+Sample price: 24.99
+Stock: 100
+Category: tops
+Images 01–04: gallery. Image 05: thumbnail.

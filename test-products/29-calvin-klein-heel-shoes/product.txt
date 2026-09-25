@@ -1,0 +1,7 @@
+Name: Calvin Klein Heel Shoes
+SKU: TEST-029
+Description: Sample listing for upload testing: Calvin Klein Heel Shoes.
+Sample price: 79.99
+Stock: 100
+Category: womens-shoes
+Images 01–04: gallery. Image 05: thumbnail.

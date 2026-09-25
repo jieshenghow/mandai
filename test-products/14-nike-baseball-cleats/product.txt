@@ -1,0 +1,7 @@
+Name: Nike Baseball Cleats
+SKU: TEST-014
+Description: Sample listing for upload testing: Nike Baseball Cleats.
+Sample price: 79.99
+Stock: 100
+Category: mens-shoes
+Images 01–04: gallery. Image 05: thumbnail.

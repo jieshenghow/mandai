@@ -1,18 +1,14 @@
 # Product Specification
 
-> **Status:** Authentication, admin management, storefront, persistent carts, safe checkout and order history are implemented.
-
-This document defines **what Mandai Assessment must do** and how to tell whether it is
-complete. [ARCHITECTURE.md](./ARCHITECTURE.md) explains **how** the system will meet these
-requirements. [DESIGN.md](./DESIGN.md) governs visual styling.
+This document defines product behavior and acceptance criteria.
+[ARCHITECTURE.md](./ARCHITECTURE.md) describes the implementation. [DESIGN.md](./DESIGN.md) governs visual styling.
 
 ## 1. Goal and scope
 
-Build a small product storefront and an admin inventory dashboard in one Next.js application, backed by an Express API
-and PostgreSQL. The essential result is a purchase flow that cannot oversell stock, even when requests arrive
-concurrently.
+The application combines a customer storefront and an admin inventory dashboard in Next.js, backed by an Express API
+and PostgreSQL. Purchases must not oversell stock, even when requests arrive concurrently.
 
-The required scope is registration/login/logout, product browsing, admin product CRUD, database-backed carts,
+The scope includes registration/login/logout, product browsing, admin product CRUD, database-backed carts,
 role enforcement, atomic multi-product orders, order history, and clear success/error feedback.
 
 ## 2. Users and permissions
@@ -62,7 +58,7 @@ displays.
 5. New success returns 201; replay of the same user/requestId and payload returns 200 with the original order. Reuse with
    different contents returns 409. Pending UI submissions are disabled; uncertain responses retain the exact request for retry.
 6. A submitted item becoming unavailable, insufficient or differently priced returns 409 and rolls back the entire submitted
-   order. The UI refreshes and the user reviews before resubmitting. The server does not silently reduce quantities or skip more items.
+   order. The UI refreshes and the user reviews before resubmitting. The server does not silently reduce quantities or skip items.
 7. Order, name/price snapshots, stock changes, inventory movements, PURCHASE logs and cart cleanup commit together. Failures
    leave all of them unchanged. Only purchased cart items are removed; stockVersion and cart version increment on success.
 8. With stock 1 and two competing buyers, exactly one succeeds, one receives 409, final stock is 0, and one order exists.
@@ -153,7 +149,7 @@ with optional safe validation details. Route parameters and request bodies are v
 | GET | `/api/orders` | `USER` | `?page=1` | Own orders, 20/page |
 | GET | `/api/orders/:id` | `USER` | — | Own order; `404` otherwise |
 
-Admin order reads: `GET /api/admin/orders?page=1` returns `{items,total,page,pageSize}` (20/page, newest time then ID descending); `GET /api/admin/orders/:id` returns one receipt. Both require ADMIN, expose `customerEmail` alongside item snapshots/time/total, and omit request hashes. USER receives 403; guests receive 401. Missing detail returns 404. There are no order mutation endpoints.
+Admin order reads: `GET /api/admin/orders?page=1` returns `{data: {items,total,page,pageSize}}` (20/page, newest time then ID descending); `GET /api/admin/orders/:id` returns one receipt. Both require ADMIN, expose `customerEmail` alongside item snapshots/time/total, and omit request hashes. USER receives 403; guests receive 401. Missing detail returns 404. There are no order mutation endpoints.
 
 Images: `GET /api/product-images/:id` is public only for an image bound to a non-archived product. Unattached uploads require the uploading ADMIN's current session; other authenticated accounts receive 404 and guests receive 401. Archived-product images return 404. Responses remain `private, no-store` to avoid retaining images after archival.
 
@@ -161,18 +157,19 @@ Order receipt data includes `id`, `totalAmountCents`, and items with `productId`
 Public product responses omit `stockVersion`; admin product responses include it.
 
 Expected failure statuses: `400` for validation, `401` for missing/invalid authentication or failed login, `403` for
-insufficient role, `404` for absent/archived products, `409` for insufficient stock, duplicate email, price changes, unavailable products, or a stale cart version. Unexpected failures return `500` without internal details. Insufficient stock specifically returns:
+insufficient role, `404` for absent/archived products, `409` for insufficient stock, duplicate email, price changes, unavailable products, or a stale cart version. Unexpected failures return `500` without internal details. Insufficient stock returns the `INSUFFICIENT_STOCK` code. For example, checkout returns the following;
+message text varies by operation and clients should use the error code:
 
 ```json
-{ "error": "INSUFFICIENT_STOCK", "message": "Not enough inventory available." }
+{ "error": "INSUFFICIENT_STOCK", "message": "An item no longer has enough stock. Review the refreshed cart and checkout again." }
 ```
 
 The API route list and the exact database/concurrency design are also documented
 in [ARCHITECTURE.md](./ARCHITECTURE.md#5-api-architecture-and-contracts).
 
-## 7. Completion and test evidence
+## 7. Acceptance criteria
 
-The assignment is complete when:
+Acceptance requires the following:
 
 - The storefront and admin pages above work in one Next.js application.
 - The Express API performs the listed operations with Zod validation, bcrypt password hashes, JWT authentication, and
@@ -189,9 +186,9 @@ The assignment is complete when:
 ## 8. Deliberate exclusions
 
 No payment gateway, shipping, cancellations, refunds, order modifications, coupons, categories, Redis, Kafka, queues, microservices, event sourcing,
-CQRS or Kubernetes. Catalog pagination, rate limiting, refresh token rotation and deployment automation remain future work.
+CQRS or Kubernetes. Catalog pagination, rate limiting, refresh token rotation, and deployment automation are outside the current scope.
 
-## Implemented admin extensions
+## 9. Images and audit history
 
 The API contracts, image storage rules and operator log behavior in [README.md](./README.md#product-management) are
 part of this specification. Each product has 0–8 local images with an explicit cover. Stock-in/out requires quantity

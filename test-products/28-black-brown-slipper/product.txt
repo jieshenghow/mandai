@@ -1,0 +1,7 @@
+Name: Black & Brown Slipper
+SKU: TEST-028
+Description: Sample listing for upload testing: Black & Brown Slipper.
+Sample price: 19.99
+Stock: 100
+Category: womens-shoes
+Images 01–04: gallery. Image 05: thumbnail.

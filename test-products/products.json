@@ -1,0 +1,422 @@
+[
+  {
+    "key": "test-001",
+    "name": "Plant Pot",
+    "description": "Sample listing for upload testing: Plant Pot.",
+    "priceCents": 1499,
+    "stock": 100,
+    "images": [
+      "01-plant-pot/01.jpg",
+      "01-plant-pot/02.jpg",
+      "01-plant-pot/03.jpg",
+      "01-plant-pot/04.jpg",
+      "01-plant-pot/05.jpg"
+    ]
+  },
+  {
+    "key": "test-002",
+    "name": "Boxed Blender",
+    "description": "Sample listing for upload testing: Boxed Blender.",
+    "priceCents": 3999,
+    "stock": 100,
+    "images": [
+      "02-boxed-blender/01.jpg",
+      "02-boxed-blender/02.jpg",
+      "02-boxed-blender/03.jpg",
+      "02-boxed-blender/04.jpg",
+      "02-boxed-blender/05.jpg"
+    ]
+  },
+  {
+    "key": "test-003",
+    "name": "Electric Stove",
+    "description": "Sample listing for upload testing: Electric Stove.",
+    "priceCents": 4999,
+    "stock": 100,
+    "images": [
+      "03-electric-stove/01.jpg",
+      "03-electric-stove/02.jpg",
+      "03-electric-stove/03.jpg",
+      "03-electric-stove/04.jpg",
+      "03-electric-stove/05.jpg"
+    ]
+  },
+  {
+    "key": "test-004",
+    "name": "Microwave Oven",
+    "description": "Sample listing for upload testing: Microwave Oven.",
+    "priceCents": 8999,
+    "stock": 100,
+    "images": [
+      "04-microwave-oven/01.jpg",
+      "04-microwave-oven/02.jpg",
+      "04-microwave-oven/03.jpg",
+      "04-microwave-oven/04.jpg",
+      "04-microwave-oven/05.jpg"
+    ]
+  },
+  {
+    "key": "test-005",
+    "name": "Blue & Black Check Shirt",
+    "description": "Sample listing for upload testing: Blue & Black Check Shirt.",
+    "priceCents": 2999,
+    "stock": 100,
+    "images": [
+      "05-blue---black-check-shirt/01.jpg",
+      "05-blue---black-check-shirt/02.jpg",
+      "05-blue---black-check-shirt/03.jpg",
+      "05-blue---black-check-shirt/04.jpg",
+      "05-blue---black-check-shirt/05.jpg"
+    ]
+  },
+  {
+    "key": "test-006",
+    "name": "Gigabyte Aorus Men Tshirt",
+    "description": "Sample listing for upload testing: Gigabyte Aorus Men Tshirt.",
+    "priceCents": 2499,
+    "stock": 100,
+    "images": [
+      "06-gigabyte-aorus-men-tshirt/01.jpg",
+      "06-gigabyte-aorus-men-tshirt/02.jpg",
+      "06-gigabyte-aorus-men-tshirt/03.jpg",
+      "06-gigabyte-aorus-men-tshirt/04.jpg",
+      "06-gigabyte-aorus-men-tshirt/05.jpg"
+    ]
+  },
+  {
+    "key": "test-007",
+    "name": "Man Plaid Shirt",
+    "description": "Sample listing for upload testing: Man Plaid Shirt.",
+    "priceCents": 3499,
+    "stock": 100,
+    "images": [
+      "07-man-plaid-shirt/01.jpg",
+      "07-man-plaid-shirt/02.jpg",
+      "07-man-plaid-shirt/03.jpg",
+      "07-man-plaid-shirt/04.jpg",
+      "07-man-plaid-shirt/05.jpg"
+    ]
+  },
+  {
+    "key": "test-008",
+    "name": "Nike Air Jordan 1 Red And Black",
+    "description": "Sample listing for upload testing: Nike Air Jordan 1 Red And Black.",
+    "priceCents": 14999,
+    "stock": 100,
+    "images": [
+      "08-nike-air-jordan-1-red-and-black/01.jpg",
+      "08-nike-air-jordan-1-red-and-black/02.jpg",
+      "08-nike-air-jordan-1-red-and-black/03.jpg",
+      "08-nike-air-jordan-1-red-and-black/04.jpg",
+      "08-nike-air-jordan-1-red-and-black/05.jpg"
+    ]
+  },
+  {
+    "key": "test-009",
+    "name": "Puma Future Rider Trainers",
+    "description": "Sample listing for upload testing: Puma Future Rider Trainers.",
+    "priceCents": 8999,
+    "stock": 100,
+    "images": [
+      "09-puma-future-rider-trainers/01.jpg",
+      "09-puma-future-rider-trainers/02.jpg",
+      "09-puma-future-rider-trainers/03.jpg",
+      "09-puma-future-rider-trainers/04.jpg",
+      "09-puma-future-rider-trainers/05.jpg"
+    ]
+  },
+  {
+    "key": "test-010",
+    "name": "iPhone 12 Silicone Case with MagSafe Plum",
+    "description": "Sample listing for upload testing: iPhone 12 Silicone Case with MagSafe Plum.",
+    "priceCents": 2999,
+    "stock": 100,
+    "images": [
+      "10-iphone-12-silicone-case-with-magsafe-plum/01.jpg",
+      "10-iphone-12-silicone-case-with-magsafe-plum/02.jpg",
+      "10-iphone-12-silicone-case-with-magsafe-plum/03.jpg",
+      "10-iphone-12-silicone-case-with-magsafe-plum/04.jpg",
+      "10-iphone-12-silicone-case-with-magsafe-plum/05.jpg"
+    ]
+  },
+  {
+    "key": "test-011",
+    "name": "Ice Cream",
+    "description": "Sample listing for upload testing: Ice Cream.",
+    "priceCents": 549,
+    "stock": 100,
+    "images": [
+      "11-ice-cream/01.jpg",
+      "11-ice-cream/02.jpg",
+      "11-ice-cream/03.jpg",
+      "11-ice-cream/04.jpg",
+      "11-ice-cream/05.jpg"
+    ]
+  },
+  {
+    "key": "test-012",
+    "name": "Man Short Sleeve Shirt",
+    "description": "Sample listing for upload testing: Man Short Sleeve Shirt.",
+    "priceCents": 1999,
+    "stock": 100,
+    "images": [
+      "12-man-short-sleeve-shirt/01.jpg",
+      "12-man-short-sleeve-shirt/02.jpg",
+      "12-man-short-sleeve-shirt/03.jpg",
+      "12-man-short-sleeve-shirt/04.jpg",
+      "12-man-short-sleeve-shirt/05.jpg"
+    ]
+  },
+  {
+    "key": "test-013",
+    "name": "Men Check Shirt",
+    "description": "Sample listing for upload testing: Men Check Shirt.",
+    "priceCents": 2799,
+    "stock": 100,
+    "images": [
+      "13-men-check-shirt/01.jpg",
+      "13-men-check-shirt/02.jpg",
+      "13-men-check-shirt/03.jpg",
+      "13-men-check-shirt/04.jpg",
+      "13-men-check-shirt/05.jpg"
+    ]
+  },
+  {
+    "key": "test-014",
+    "name": "Nike Baseball Cleats",
+    "description": "Sample listing for upload testing: Nike Baseball Cleats.",
+    "priceCents": 7999,
+    "stock": 100,
+    "images": [
+      "14-nike-baseball-cleats/01.jpg",
+      "14-nike-baseball-cleats/02.jpg",
+      "14-nike-baseball-cleats/03.jpg",
+      "14-nike-baseball-cleats/04.jpg",
+      "14-nike-baseball-cleats/05.jpg"
+    ]
+  },
+  {
+    "key": "test-015",
+    "name": "Sports Sneakers Off White & Red",
+    "description": "Sample listing for upload testing: Sports Sneakers Off White & Red.",
+    "priceCents": 11999,
+    "stock": 100,
+    "images": [
+      "15-sports-sneakers-off-white-red/01.jpg",
+      "15-sports-sneakers-off-white-red/02.jpg",
+      "15-sports-sneakers-off-white-red/03.jpg",
+      "15-sports-sneakers-off-white-red/04.jpg",
+      "15-sports-sneakers-off-white-red/05.jpg"
+    ]
+  },
+  {
+    "key": "test-016",
+    "name": "Sports Sneakers Off White Red",
+    "description": "Sample listing for upload testing: Sports Sneakers Off White Red.",
+    "priceCents": 10999,
+    "stock": 100,
+    "images": [
+      "16-sports-sneakers-off-white-red/01.jpg",
+      "16-sports-sneakers-off-white-red/02.jpg",
+      "16-sports-sneakers-off-white-red/03.jpg",
+      "16-sports-sneakers-off-white-red/04.jpg",
+      "16-sports-sneakers-off-white-red/05.jpg"
+    ]
+  },
+  {
+    "key": "test-017",
+    "name": "Oppo K1",
+    "description": "Sample listing for upload testing: Oppo K1.",
+    "priceCents": 29999,
+    "stock": 100,
+    "images": [
+      "17-oppo-k1/01.jpg",
+      "17-oppo-k1/02.jpg",
+      "17-oppo-k1/03.jpg",
+      "17-oppo-k1/04.jpg",
+      "17-oppo-k1/05.jpg"
+    ]
+  },
+  {
+    "key": "test-018",
+    "name": "Cricket Helmet",
+    "description": "Sample listing for upload testing: Cricket Helmet.",
+    "priceCents": 4499,
+    "stock": 100,
+    "images": [
+      "18-cricket-helmet/01.jpg",
+      "18-cricket-helmet/02.jpg",
+      "18-cricket-helmet/03.jpg",
+      "18-cricket-helmet/04.jpg",
+      "18-cricket-helmet/05.jpg"
+    ]
+  },
+  {
+    "key": "test-019",
+    "name": "iPad Mini 2021 Starlight",
+    "description": "Sample listing for upload testing: iPad Mini 2021 Starlight.",
+    "priceCents": 49999,
+    "stock": 100,
+    "images": [
+      "19-ipad-mini-2021-starlight/01.jpg",
+      "19-ipad-mini-2021-starlight/02.jpg",
+      "19-ipad-mini-2021-starlight/03.jpg",
+      "19-ipad-mini-2021-starlight/04.jpg",
+      "19-ipad-mini-2021-starlight/05.jpg"
+    ]
+  },
+  {
+    "key": "test-020",
+    "name": "Samsung Galaxy Tab S8 Plus Grey",
+    "description": "Sample listing for upload testing: Samsung Galaxy Tab S8 Plus Grey.",
+    "priceCents": 59999,
+    "stock": 100,
+    "images": [
+      "20-samsung-galaxy-tab-s8-plus-grey/01.jpg",
+      "20-samsung-galaxy-tab-s8-plus-grey/02.jpg",
+      "20-samsung-galaxy-tab-s8-plus-grey/03.jpg",
+      "20-samsung-galaxy-tab-s8-plus-grey/04.jpg",
+      "20-samsung-galaxy-tab-s8-plus-grey/05.jpg"
+    ]
+  },
+  {
+    "key": "test-021",
+    "name": "Samsung Galaxy Tab White",
+    "description": "Sample listing for upload testing: Samsung Galaxy Tab White.",
+    "priceCents": 34999,
+    "stock": 100,
+    "images": [
+      "21-samsung-galaxy-tab-white/01.jpg",
+      "21-samsung-galaxy-tab-white/02.jpg",
+      "21-samsung-galaxy-tab-white/03.jpg",
+      "21-samsung-galaxy-tab-white/04.jpg",
+      "21-samsung-galaxy-tab-white/05.jpg"
+    ]
+  },
+  {
+    "key": "test-022",
+    "name": "Blue Frock",
+    "description": "Sample listing for upload testing: Blue Frock.",
+    "priceCents": 2999,
+    "stock": 100,
+    "images": [
+      "22-blue-frock/01.jpg",
+      "22-blue-frock/02.jpg",
+      "22-blue-frock/03.jpg",
+      "22-blue-frock/04.jpg",
+      "22-blue-frock/05.jpg"
+    ]
+  },
+  {
+    "key": "test-023",
+    "name": "Girl Summer Dress",
+    "description": "Sample listing for upload testing: Girl Summer Dress.",
+    "priceCents": 1999,
+    "stock": 100,
+    "images": [
+      "23-girl-summer-dress/01.jpg",
+      "23-girl-summer-dress/02.jpg",
+      "23-girl-summer-dress/03.jpg",
+      "23-girl-summer-dress/04.jpg",
+      "23-girl-summer-dress/05.jpg"
+    ]
+  },
+  {
+    "key": "test-024",
+    "name": "Gray Dress",
+    "description": "Sample listing for upload testing: Gray Dress.",
+    "priceCents": 3499,
+    "stock": 100,
+    "images": [
+      "24-gray-dress/01.jpg",
+      "24-gray-dress/02.jpg",
+      "24-gray-dress/03.jpg",
+      "24-gray-dress/04.jpg",
+      "24-gray-dress/05.jpg"
+    ]
+  },
+  {
+    "key": "test-025",
+    "name": "Short Frock",
+    "description": "Sample listing for upload testing: Short Frock.",
+    "priceCents": 2499,
+    "stock": 100,
+    "images": [
+      "25-short-frock/01.jpg",
+      "25-short-frock/02.jpg",
+      "25-short-frock/03.jpg",
+      "25-short-frock/04.jpg",
+      "25-short-frock/05.jpg"
+    ]
+  },
+  {
+    "key": "test-026",
+    "name": "Tartan Dress",
+    "description": "Sample listing for upload testing: Tartan Dress.",
+    "priceCents": 3999,
+    "stock": 100,
+    "images": [
+      "26-tartan-dress/01.jpg",
+      "26-tartan-dress/02.jpg",
+      "26-tartan-dress/03.jpg",
+      "26-tartan-dress/04.jpg",
+      "26-tartan-dress/05.jpg"
+    ]
+  },
+  {
+    "key": "test-027",
+    "name": "Black Women's Gown",
+    "description": "Sample listing for upload testing: Black Women's Gown.",
+    "priceCents": 12999,
+    "stock": 100,
+    "images": [
+      "27-black-women-s-gown/01.jpg",
+      "27-black-women-s-gown/02.jpg",
+      "27-black-women-s-gown/03.jpg",
+      "27-black-women-s-gown/04.jpg",
+      "27-black-women-s-gown/05.jpg"
+    ]
+  },
+  {
+    "key": "test-028",
+    "name": "Black & Brown Slipper",
+    "description": "Sample listing for upload testing: Black & Brown Slipper.",
+    "priceCents": 1999,
+    "stock": 100,
+    "images": [
+      "28-black-brown-slipper/01.jpg",
+      "28-black-brown-slipper/02.jpg",
+      "28-black-brown-slipper/03.jpg",
+      "28-black-brown-slipper/04.jpg",
+      "28-black-brown-slipper/05.jpg"
+    ]
+  },
+  {
+    "key": "test-029",
+    "name": "Calvin Klein Heel Shoes",
+    "description": "Sample listing for upload testing: Calvin Klein Heel Shoes.",
+    "priceCents": 7999,
+    "stock": 100,
+    "images": [
+      "29-calvin-klein-heel-shoes/01.jpg",
+      "29-calvin-klein-heel-shoes/02.jpg",
+      "29-calvin-klein-heel-shoes/03.jpg",
+      "29-calvin-klein-heel-shoes/04.jpg",
+      "29-calvin-klein-heel-shoes/05.jpg"
+    ]
+  },
+  {
+    "key": "test-030",
+    "name": "Red Shoes",
+    "description": "Sample listing for upload testing: Red Shoes.",
+    "priceCents": 3499,
+    "stock": 100,
+    "images": [
+      "30-red-shoes/01.jpg",
+      "30-red-shoes/02.jpg",
+      "30-red-shoes/03.jpg",
+      "30-red-shoes/04.jpg",
+      "30-red-shoes/05.jpg"
+    ]
+  }
+]

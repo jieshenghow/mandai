@@ -1,0 +1,7 @@
+Name: Plant Pot
+SKU: TEST-001
+Description: Sample listing for upload testing: Plant Pot.
+Sample price: 14.99
+Stock: 100
+Category: home-decoration
+Images 01–04: gallery. Image 05: thumbnail.

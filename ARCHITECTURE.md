@@ -1,8 +1,5 @@
 # Architecture
 
-> **Status:** Authentication and admin product/image/inventory management with transactional change logs are implemented.
-> Storefront, persistent carts, idempotent checkout and private order history are also implemented. Catalog pages and active-product reads/images are public; customer operations require USER and administration requires ADMIN.
-
 [SPEC.md](./SPEC.md) defines the required behavior and acceptance criteria. This document records the technical design
 and its trade-offs.
 
@@ -12,14 +9,23 @@ Mandai Assessment is a small product storefront and inventory dashboard. One Nex
 admin pages. A separate Express API owns authentication, authorization, product writes, and purchasing. PostgreSQL is
 the source of truth for inventory and orders.
 
-```mermaid
-flowchart LR
-  B[Browser] --> W[Next.js storefront + admin]
-  W -->|same-origin /api proxy| R[Express routes]
-  R --> M[Zod + JWT auth + role middleware]
-  M --> H[Domain route modules: auth, products, commerce]
-  H --> P[Prisma Client + parameterized SQL]
-  P --> D[(PostgreSQL)]
+```text
+Browser
+  |
+  v
+Next.js storefront and admin dashboard
+  | Same-origin /api proxy
+  v
+Express routes
+  | JWT authentication and role checks on protected routes
+  v
+Domain route modules: auth, products, commerce
+  | Zod validation and transaction logic
+  v
+Prisma Client + parameterized SQL
+  |
+  v
+PostgreSQL
 ```
 
 The Next.js proxy keeps browser requests and the authentication cookie on one origin. Express remains the API authority;
@@ -55,7 +61,9 @@ mandai-assessment/
 │           ├── commerce.ts     # carts, checkout transaction and order reads
 │           ├── db.ts           # Prisma PostgreSQL adapter
 │           ├── seed.ts         # local demo users
+│           ├── seed-products.ts # repeatable demo catalog import
 │           └── server.ts       # API listener and image cleanup
+├── test-products/              # demo catalog manifest and source images
 ├── prisma/                     # schema and checked-in SQL migrations
 ├── prisma7.config.ts           # Prisma 7 database connection and migration paths
 ├── DESIGN.md                   # visual source of truth
@@ -72,17 +80,13 @@ Frontend storefront, cart and order components reuse the workspace shell and vis
 
 ## 4. Database schema
 
-Use UUID primary keys and UTC timestamps. All PostgreSQL tables use the requested `tbl_` prefix and singular snake_case
-names. Database columns use snake_case. Prisma models remain singular PascalCase and their fields, like API JSON, use
-camelCase. Prisma `@@map` and `@map` keep these naming layers separate. This is a naming convention, not a SQL
-requirement; PostgreSQL permits underscores and also permits mixed-case identifiers when
-quoted. [Prisma's database-mapping documentation](https://docs.prisma.io/docs/orm/v6/prisma-schema/data-model/database-mapping)
-describes the mapping mechanism.
+Tables use UUID primary keys, UTC timestamps, the `tbl_` prefix, and singular snake_case names. Database columns use snake_case. Prisma models remain singular PascalCase and their fields, like API JSON, use
+camelCase. Prisma `@@map` and `@map` map model and field names to their database names.
 
 | Prisma model | PostgreSQL table | PostgreSQL columns                                                                                                        | Relationships                                                                |
 |--------------|------------------|---------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
 | `User`       | `tbl_user`       | `id`, `email` (unique), `password_hash`, `role`, `created_at`, `updated_at`                                               | One user has many orders.                                                    |
-| `Product`    | `tbl_product`    | `id`, `name`, `description`, `price_cents`, `stock`, `stock_version`, `deleted_at` (nullable), `created_at`, `updated_at` | One product has many order items.                                            |
+| `Product`    | `tbl_product`    | `id`, `name`, `description`, `price_cents`, `stock`, `stock_version`, `cover_image_id` (nullable), `deleted_at` (nullable), `created_at`, `updated_at` | One product has many order items.                                            |
 | `Order`      | `tbl_order`      | `id`, `user_id`, `request_id`, `request_hash`, `total_amount_cents`, `created_at`                                                                       | Belongs to a user; has multiple purchase-time order items. |
 | `Cart` | `tbl_cart` | `user_id` (PK/FK), `version` | One per user; has cart items. |
 | `CartItem` | `tbl_cart_item` | `user_id`, `product_id` (composite PK), `quantity` | References cart and product. |
@@ -93,9 +97,9 @@ describes the mapping mechanism.
 
 `Cart` (`tbl_cart`) has one row per user with an integer version. `CartItem` (`tbl_cart_item`) has a composite
 `(user_id, product_id)` primary key, product foreign key and quantity constraint of 1–100. Cart rows are created lazily.
-Orders have a unique `(user_id, request_id)` index and a SHA-256 request hash. Legacy orders may have null request fields;
-new checkout requests require them. The migration backfills legacy item names from their referenced products before
-making `product_name` non-null. Historical names before this migration cannot be reconstructed.
+Orders have a unique `(user_id, request_id)` index and a SHA-256 request hash. The request fields are nullable in the schema, but checkout requires them. The checkout migration backfills
+existing item names from their referenced products before making `product_name` non-null. Names from before
+that migration cannot be reconstructed.
 
 The current Prisma schema maps `Product.priceCents` to `tbl_product.price_cents`. An abbreviated example:
 
@@ -111,37 +115,18 @@ model Product {
 The snippet illustrates naming only; the complete definition is in [schema.prisma](./prisma/schema.prisma). Plain
 columns such as `id` and `stock` need no `@map` because their names are already identical.
 
-```mermaid
-erDiagram
-  tbl_user ||--o{ tbl_order : places
-  tbl_order ||--|{ tbl_order_item : contains
-  tbl_product ||--o{ tbl_order_item : purchased_as
-  tbl_user {
-    uuid id PK
-    string email UK
-    string password_hash
-    enum role
-  }
-  tbl_product {
-    uuid id PK
-    int price_cents
-    int stock
-    int stock_version
-    timestamp deleted_at
-  }
-  tbl_order {
-    uuid id PK
-    uuid user_id FK
-    int total_amount_cents
-  }
-  tbl_order_item {
-    uuid id PK
-    uuid order_id FK
-    uuid product_id FK
-    int quantity
-    int unit_price_cents
-  }
-```
+The relationship table below describes the core purchase relationships; the table above and Prisma schema include
+carts, images, inventory movements, and product logs.
+
+| Parent table | Relationship | Referencing column |
+| --- | --- | --- |
+| `tbl_user` | One user can place zero or more orders; each order belongs to one user. | `tbl_order.user_id` |
+| `tbl_order` | Each purchase creates one or more order items; each item belongs to one order. | `tbl_order_item.order_id` |
+| `tbl_product` | One product can appear in zero or more order items; each item references one product. | `tbl_order_item.product_id` |
+
+All four tables use UUID `id` primary keys. `tbl_user.email` is unique. Orders store the total amount in cents;
+order items store quantity and purchase-time name and unit-price snapshots. Products store current price, stock,
+stock version, and archive state. The complete column list is in the schema table above.
 
 **Inventory:** The [initial migration](./prisma/migrations/20260925040959_init/migration.sql) adds `CHECK (stock >= 0)`
 on `tbl_product` in PostgreSQL. It also constrains `price_cents` to `1..10000000`, `stock` to at most `1000000`,
@@ -174,7 +159,7 @@ image rows in stable order. Files live in UPLOAD_DIR and are decoded/re-encoded 
 operator/name snapshots and JSON field changes with optional movement linkage, in the same transaction as the change.
 There are no application update/delete endpoints for logs. History intentionally survives product archiving.
 
-See [README.md](./README.md#added-api-contracts) for current image, stock and log contracts; stock changes are incremental operations, never absolute-stock metadata PATCH requests.
+See [README.md](./README.md#inventory-api-contracts) for current image, stock and log contracts; stock changes are incremental operations, never absolute-stock metadata PATCH requests.
 
 ## 5. API architecture and contracts
 
@@ -182,7 +167,8 @@ The pipeline is **route → authentication/role middleware → domain handler �
 validate Zod schemas, shape responses and own business transactions. Prisma handles normal persistence; tagged, parameterized raw SQL handles the stock
 update. There is no repository layer or in-memory inventory lock.
 
-All responses use camelCase JSON. Success objects are `{ "data": ... }`; lists use `{ "data": [...] }`. Errors use
+All responses use camelCase JSON. Success objects are `{ "data": ... }`; unpaginated lists use `{ "data": [...] }`.
+Paginated order and product-log lists use `{ "data": { "items": [...], "total": ..., "page": ..., "pageSize": ... } }`. Errors use
 `{ "error": "MACHINE_CODE", "message": "Human-readable message." }`, optionally with safe validation `details`. Never
 expose hashes or internal database errors.
 
@@ -206,7 +192,7 @@ expose hashes or internal database errors.
 | GET | `/api/orders` | `USER` | Own orders, newest first, 20/page | `400` |
 | GET | `/api/orders/:id` | `USER` | Own receipt | `400`, `404` |
 
-Admin order reads: `GET /api/admin/orders?page=1` returns `{items,total,page,pageSize}` (20/page, newest time then ID descending); `GET /api/admin/orders/:id` returns one receipt. Both require ADMIN, expose `customerEmail` alongside item snapshots/time/total, and omit request hashes. USER receives 403; guests receive 401. Missing detail returns 404. There are no order mutation endpoints.
+Admin order reads: `GET /api/admin/orders?page=1` returns `{data: {items,total,page,pageSize}}` (20/page, newest time then ID descending); `GET /api/admin/orders/:id` returns one receipt. Both require ADMIN, expose `customerEmail` alongside item snapshots/time/total, and omit request hashes. USER receives 403; guests receive 401. Missing detail returns 404. There are no order mutation endpoints.
 
 Images: `GET /api/product-images/:id` is public only for an image bound to a non-archived product. Unattached uploads require the uploading ADMIN's current session; other authenticated accounts receive 404 and guests receive 401. Archived-product images return 404. Responses remain `private, no-store` to avoid retaining images after archival.
 
@@ -232,14 +218,13 @@ names, quantities and prices. Internal request hashes and user IDs are not expos
 
 Passwords are hashed with bcrypt before storage. Successful registration/login sets a signed JWT in an `HttpOnly`,
 `SameSite=Strict` cookie scoped to `/`; use `Secure` outside local HTTP development. The token contains only user ID,
-role, issued time, and expiry. Plan a one-hour expiry; logout clears the cookie. Logout does not revoke an already
+role, issued time, and expiry. Tokens expire after one hour; logout clears the cookie. Logout does not revoke an already
 copied token, a known limitation of this stateless approach.
 
 The Next.js app proxies `/api/*` to Express, so browser API calls and the cookie are same-origin. Express verifies the
 JWT on every protected request. Role middleware checks `ADMIN` on every admin route and `USER` on cart, checkout and personal-order routes. ADMIN cannot use customer operations. The server ignores any claimed role
 in registration, product bodies, or frontend state. UI route guards improve navigation but are not a security boundary.
-Treat database user/role records as authoritative where revocation or immediate role changes matter; the implemented
-middleware reloads the database user and role on each protected request. Copied tokens remain usable until expiry unless
+Database user and role records are authoritative; middleware reloads them on each protected request. Copied tokens remain usable until expiry unless
 the user is deleted.
 
 ## 7. Purchase transaction
@@ -305,10 +290,10 @@ submitted before checkout so the summary matches the purchase.
 | 409  | `INSUFFICIENT_STOCK` / `CART_CHANGED` / `PRICE_CHANGED`  | Stock, cart or price changed; refresh and reconfirm. |
 | 500  | `INTERNAL_ERROR`                          | Unexpected failure; details logged server-side.               |
 
-Example insufficient-inventory response:
+Example checkout insufficient-inventory response (messages vary by operation; clients should use the error code):
 
 ```json
-{ "error": "INSUFFICIENT_STOCK", "message": "Not enough inventory available." }
+{ "error": "INSUFFICIENT_STOCK", "message": "An item no longer has enough stock. Review the refreshed cart and checkout again." }
 ```
 
 Do not translate unexpected database failures into 409. A transaction failure should return an internal error while
@@ -323,7 +308,7 @@ enabled; same-origin proxying is the primary browser path. Render user content a
 
 This is take-home security, not a production claim. Before a public deployment, add a deliberate CSRF defense for
 cookie-authenticated mutations, refresh token rotation or server-side session revocation, login rate limiting, account
-verification, password reset, audit logging, secret rotation, and operational monitoring. `SameSite=Strict` lowers
+verification, password reset, authentication/security audit logging, secret rotation, and operational monitoring. `SameSite=Strict` lowers
 cross-site request risk but does not replace a full CSRF review, especially with same-site subdomains.
 
 ## 11. Technical trade-offs
@@ -343,7 +328,7 @@ cross-site request risk but does not replace a full CSRF review, especially with
 - **JWT cookie vs server session:** The cookie simplifies this take-home's single-origin browser flow; immediate
   revocation needs more infrastructure or shorter expiry.
 
-## 12. Testing strategy and roadmap
+## 12. Testing strategy
 
 Node's test runner and Supertest exercise the actual Express handlers against disposable real PostgreSQL databases,
 applying every checked-in migration. No transaction mocks. Each suite drops its own database on completion.
@@ -354,33 +339,39 @@ snapshots and owner-only history; two buyers for one unit; 12 buyers for three u
 repeat purchases; multi-item rollback on stock, price or archive conflicts; inverse product order without deadlocks;
 purchase versus admin stock-out; total overflow; forced order/item/movement/log insertion failure with full rollback.
 
-Planned manual browser acceptance covers search/detail/add, quantity editing, greyed unavailable items, checkout receipt/history,
+Manual browser acceptance covers search/detail/add, quantity editing, greyed unavailable items, checkout receipt/history,
 keyboard navigation and narrow/mobile layouts. Browser checks require an available browser connection.
 
-## 13. Future improvements
+### Demo catalog import
+
+`pnpm db:seed:products` reads `test-products/products.json` and its local image files. Manifest keys map to deterministic
+product UUIDs. An advisory transaction lock serializes imports of the same key; existing rows, including archived
+products, are skipped. The script never resets stock or edits existing products. All input images are validated and
+converted before database writes. Each product, image metadata, initial stock movement, and CREATE log commits in one
+transaction, attributed to the seeded administrator. Files written by a failed transaction are removed; a process crash
+can leave orphan files for the normal image cleanup job. Products committed before a later failure remain available,
+and rerunning imports the remaining products.
+
+## 13. Scope limits
 
 Payment and reservations, shipping/refunds, catalog pagination, rate limiting, token revocation, monitoring and deployment
-automation remain outside this assessment. Carts, order history, basic catalog search and checkout idempotency are implemented.
+automation are outside the current scope.
 
-## 14. Recorded baseline verification (2026-09-25)
+## 14. Recorded verification (2026-09-26)
 
-The following results were recorded in baseline commit `27ea8f5`. They are historical evidence, not checks
-rerun for the targeted review fixes; in particular, the API suites and web build were not rerun for those fixes.
+Verification target: application code at commit `61cec90`.
 
 | Command | Result |
 | --- | --- |
+| `pnpm test` | 22 API tests and 6 frontend tests passed. API tests used real PostgreSQL and covered concurrency and injected persistence failures. Expected injected-error logs are not test failures. |
+| `pnpm typecheck` | Passed for both API and web applications. |
 | `pnpm lint` | Passed. |
-| `pnpm --filter @mandai/api typecheck` | Passed after correcting two implicit-any annotations in new tests. |
-| `pnpm --filter @mandai/web exec tsc --noEmit --incremental false` | Passed; incremental output disabled to avoid rewriting tracked build metadata. |
-| `pnpm --filter @mandai/web test` | 3 tests passed: route matrix, proxy, whole-cart eligibility/payload. |
-| `pnpm --filter @mandai/api test` | 22 tests passed against real PostgreSQL, including concurrency and injected persistence failures. Expected injected-error logs are not test failures. |
-| `pnpm --filter @mandai/web build` | Passed, including both new admin order routes. |
+| `pnpm --filter @mandai/web build` | Passed, including storefront and admin routes. |
+| `pnpm db:status` | Passed; all three checked-in migrations were applied in the local database. |
 | `git diff --check` | Passed. |
 
-The user explicitly authorized localhost:5432 with the existing DATABASE_URL as a control connection. Only separate
-`mandai_{auth,products,commerce}_test_<pid>_<timestamp>` databases received test migrations/data and were dropped by
-suite teardown. A subsequent read-only pg_database query found no remaining databases matching these test names.
-No development schema migration, seed, credential edit, commit, push or deployment was performed.
+API suites create uniquely named disposable databases, apply migrations, and drop those databases during teardown.
+The database role needs CREATE DATABASE permission; use a local or dedicated test PostgreSQL instance.
 
 Manual browser interaction, visual layout, keyboard and responsive acceptance were not run. The successful build and
 unit/integration checks do not imply those checks passed. Catalog pagination remains intentionally out of scope.

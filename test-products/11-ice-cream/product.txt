@@ -1,0 +1,7 @@
+Name: Ice Cream
+SKU: TEST-011
+Description: Sample listing for upload testing: Ice Cream.
+Sample price: 5.49
+Stock: 100
+Category: groceries
+Images 01–04: gallery. Image 05: thumbnail.

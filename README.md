@@ -3,9 +3,8 @@
 A small full-stack product management take-home: one customer storefront, one admin inventory dashboard, and one API
 whose purchase flow is designed to prevent overselling.
 
-> **Current state:** Authentication, admin inventory management, product browsing, database-backed carts,
-> multi-product checkout and order history are implemented. Checkout prevents overselling and duplicate orders.
-> Catalog pages, active product APIs and attached active-product images are public. Cart, checkout and personal orders require USER; administration requires ADMIN. No payment gateway is used.
+Catalog pages, active-product APIs, and attached product images are public. Cart, checkout, and personal orders
+require USER; administration requires ADMIN. Checkout prevents overselling and duplicate orders. No payment gateway is used.
 
 ## Features
 
@@ -30,8 +29,7 @@ whose purchase flow is designed to prevent overselling.
   together.
 - A database `CHECK (stock >= 0)` and a real PostgreSQL concurrency test provide defense and evidence.
 
-Storefront, purchasing and admin inventory management are implemented. Real PostgreSQL integration tests cover
-concurrent buyers, repeat requests, admin stock competition and transactional rollback.
+Real PostgreSQL integration tests cover concurrent buyers, repeat requests, admin stock competition, and transactional rollback.
 
 ## Tech stack
 
@@ -46,11 +44,17 @@ concurrent buyers, repeat requests, admin stock competition and transactional ro
 
 ## Architecture
 
-```mermaid
-flowchart LR
-  B[Browser] --> W[Next.js web app]
-  W -->|/api proxy| A[Express API]
-  A -->|Prisma + conditional SQL| P[(PostgreSQL)]
+```text
+Browser
+  |
+  v
+Next.js storefront and admin dashboard
+  | Same-origin /api proxy
+  v
+Express API
+  | Prisma + parameterized conditional SQL
+  v
+PostgreSQL
 ```
 
 The same Next.js app serves the store and admin pages. Express validates input and enforces roles before domain route handlers
@@ -68,25 +72,27 @@ criteria; [ARCHITECTURE.md](./ARCHITECTURE.md) explains the database model, tran
 ### Run locally
 
 ```bash
+git clone https://github.com/jieshenghow/mandai.git mandai-assessment
 cd mandai-assessment
 cp .env.example .env
-docker compose up -d
+docker compose up -d --wait
 pnpm install
 pnpm db:deploy
 pnpm db:generate
+pnpm db:seed
+pnpm db:seed:products
 pnpm dev
 ```
 
-Run `pnpm db:seed`, then open `http://localhost:3000` to sign in. `http://localhost:4000/api/health` checks Express
+Open `http://localhost:3000` and sign in with a demo account below. `pnpm db:seed` creates accounts;
+`pnpm db:seed:products` imports the 30 sample products and 150 images from `test-products/`.
+You can also create and edit products as an administrator at `/admin/products`.
+`http://localhost:4000/api/health` checks Express
 directly; `http://localhost:3000/api/health` checks the Next.js proxy to Express. The root `pnpm dev` script starts both
 workspace apps. If port 5432 is occupied, change the Compose host port and the `DATABASE_URL` in `.env` together.
 
-The scaffold was created with the [official Next.js CLI](https://nextjs.org/docs/app/getting-started/installation) and
-the [official Express application generator](https://expressjs.com/en/starter/generator/). Express's generated
-JavaScript example was then converted using
-the [official TypeScript setup](https://expressjs.com/en/starter/installing/) and trimmed to an API health route. The
-API uses `tsx` to run TypeScript across Node builds, including those without native TypeScript support. The Next.js
-starter uses the App Router, TypeScript, Tailwind CSS, and ESLint. One root pnpm lockfile manages both apps.
+The API uses `tsx` to run TypeScript. The web application uses the Next.js App Router, TypeScript, Tailwind CSS,
+and ESLint. One root pnpm lockfile manages both applications.
 
 ### Database migrations
 
@@ -119,20 +125,25 @@ SQL checks. Run `pnpm db:seed` to create development demo accounts. Existing acc
 ## Environment variables
 
 Copy [.env.example](./.env.example) to `.env`. `DATABASE_URL` connects the Prisma CLI to the local database and connects
-the API. `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` configure Compose. `API_PORT` sets Express's port,
-`WEB_ORIGIN` will define the allowed web origin, and `JWT_SECRET` signs authentication tokens. The Next.js proxy targets
+the API. `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` configure Compose. `API_PORT` sets Express's port.
+`JWT_SECRET` signs authentication tokens. `WEB_ORIGIN` is present in `.env.example` but is currently unused;
+browser requests use the same-origin Next.js proxy, and no configurable CORS allowlist is implemented. The proxy targets
 port 4000 by default; if the API port changes, set `API_PROXY_TARGET` in the web process environment. Replace the sample
 JWT secret before deployment. `.env` is ignored by Git; the checked-in values are local development examples only.
 
 ## Demo accounts
 
-Run `pnpm db:seed` to create `admin@example.com` (`ADMIN`) and `user@example.com` (`USER`). Both new accounts use **
-`DemoPass123!`**, for local development only. Re-running the seed does not reset existing passwords or roles. Public
+Run `pnpm db:seed` to create `admin@example.com` (`ADMIN`) and `user@example.com` (`USER`). Both new accounts use
+**`DemoPass123!`**, for local development only. Re-running the seed does not reset existing passwords or roles. Public
 registration always creates `USER`.
 
-Admin order reads: `GET /api/admin/orders?page=1` returns `{items,total,page,pageSize}` (20/page, newest time then ID descending); `GET /api/admin/orders/:id` returns one receipt. Both require ADMIN, expose `customerEmail` alongside item snapshots/time/total, and omit request hashes. USER receives 403; guests receive 401. Missing detail returns 404. There are no order mutation endpoints.
+### Demo products
 
-Images: `GET /api/product-images/:id` is public only for an image bound to a non-archived product. Unattached uploads require the uploading ADMIN's current session; other authenticated accounts receive 404 and guests receive 401. Archived-product images return 404. Responses remain `private, no-store` to avoid retaining images after archival.
+Run `pnpm db:seed:products` after seeding accounts to import [test-products/products.json](./test-products/products.json).
+The script runs directly against PostgreSQL without requiring a running API. It copies and converts local photos to
+WebP, selects the first image as the cover, and records initial inventory and creation history for each product.
+Stable product keys make reruns safe: existing products, including archived ones, are skipped without resetting stock
+or overwriting edits. See [test-products/README.md](./test-products/README.md) for the manifest format and import behavior.
 
 ## Authentication and route groups
 
@@ -143,7 +154,7 @@ The `(auth)` group contains the shared `/login` and `/register` pages. `(app)` c
 rendering all page requests: catalog `/` and `/products/[id]` are public; other business pages require login by default; `/admin` and descendants additionally require
 `ADMIN`. Signed-in users visiting login/register return to their role’s home page. Unknown paths require authentication
 and then show the themed 404. Static framework assets and `/api` are excluded. Put additional public static assets in an
-explicitly excluded path if added later; never exclude arbitrary file extensions because business URLs may contain dots.
+explicitly excluded path; never exclude arbitrary file extensions because business URLs may contain dots.
 
 The proxy verifies sessions with Express `/api/auth/me`, forwards the session cookie, and does not cache identity
 responses. Service failures return 503 instead of granting access. USER is redirected from admin pages to `/`;
@@ -153,13 +164,6 @@ JWT sessions last one hour in an HttpOnly, SameSite=Strict cookie with `Path=/` 
 up the current database user/role for each protected request. Logout clears the cookie; copied tokens are not revoked
 before expiry. Set a random `JWT_SECRET` of at least 32 characters before running outside a local demo. Passwords use
 bcrypt. No token is stored in localStorage.
-
-### Auth verification
-
-`pnpm test` creates a uniquely named disposable PostgreSQL database, applies the checked-in migration, runs
-authentication and route-policy tests, and drops that test database. The connection from `DATABASE_URL` needs permission
-to create databases. Tests do not modify development records. Run `pnpm lint`, `pnpm typecheck`, and
-`pnpm --filter @mandai/web build` for static checks.
 
 ## Web routes
 
@@ -173,12 +177,13 @@ to create databases. Tests do not modify development records. Run `pnpm lint`, `
 | `/login`, `/register`  | Authentication                      |
 | `/admin`               | Inventory summary                   |
 | `/admin/products`      | Table-oriented inventory management |
+| `/admin/orders`        | All-customer order history |
+| `/admin/orders/[id]`   | Read-only order detail with customer email |
 | `/admin/product-logs`   | Filtered product and purchase logs   |
 
-Shared UI pieces include `AppHeader`, `AdminSidebar`, `PageContainer`, `ProductCard`, `ProductTable`,
-`ProductForm`, `StockBadge`, `QuantitySelector`, and small `Button`, `Input`, `Badge`, `Table`, and `Dialog` primitives.
-The admin table will right-align price/stock and derive **In Stock**, **Low Stock**, and **Sold Out** from the current
-stock.
+`Workspace` provides shared navigation and account state. Screens reuse `ProductForm` and the `Modal`,
+`ModalCancel`, `Feedback`, and `Status` components. The storefront, inventory, cart, and orders live in their
+respective screen components. Stock labels derive **In Stock**, **Low Stock**, and **Sold Out** from current stock.
 
 ## API overview
 
@@ -202,6 +207,12 @@ stock.
 | POST   | `/api/checkout`             | `USER`; atomic purchase |
 | GET    | `/api/orders`               | `USER`; own orders, 20/page |
 | GET    | `/api/orders/:id`           | `USER`; own order |
+| GET    | `/api/admin/orders`         | `ADMIN`; all orders, 20/page |
+| GET    | `/api/admin/orders/:id`     | `ADMIN`; order with customer email |
+
+Admin order lists return `{data: {items,total,page,pageSize}}`, sorted by creation time then ID descending.
+Order details return `{data: receipt}`. Admin receipts include `customerEmail` and omit request hashes.
+USER receives 403; guests receive 401; missing order details return 404. There are no order mutation endpoints.
 
 Cart writes include `version`. Add accepts `{productId, quantity, version}`, PATCH accepts `{quantity, version}`,
 and DELETE accepts `{version}`. One cart supports 100 different products, each with quantity 1–100.
@@ -233,13 +244,19 @@ responses resolve the pending request. Account lookup failures display a retry c
 
 ## Testing
 
-`pnpm test` runs frontend tests and Node test runner / Supertest against uniquely named disposable PostgreSQL databases. Review DATABASE_URL first: API suites connect to that control database, CREATE separate `mandai_{auth,products,commerce}_test_<pid>_<timestamp>` databases, apply migrations there and DROP those databases WITH (FORCE) afterward. Run only against an explicitly approved test target. It does not
-modify development records. The DATABASE_URL user needs CREATE DATABASE permission. Coverage includes authentication,
+`pnpm test` runs frontend tests and Node test runner / Supertest against uniquely named disposable PostgreSQL databases.
+Use a local or dedicated test PostgreSQL instance for `DATABASE_URL`. API suites connect to that control database,
+create separate `mandai_{auth,products,commerce}_test_<pid>_<timestamp>` databases, apply migrations there, and drop
+those databases with `DROP DATABASE ... WITH (FORCE)` afterward. Tests do not modify development records.
+The `DATABASE_URL` user needs CREATE DATABASE permission. Coverage includes authentication,
 admin CRUD/uploads/audit, cart isolation and stale edits, order ownership/snapshots, last-unit competition, 12 concurrent
 buyers competing for 3 units, reverse-order multi-item carts, duplicate checkouts, purchase versus admin stock-out,
 and forced order/item/movement/log failures with complete rollback.
 
 Run `pnpm typecheck`, `pnpm lint`, and `pnpm --filter @mandai/web build` for static/build verification.
+The [recorded verification](./ARCHITECTURE.md#14-recorded-verification-2026-09-26) passed 22 API tests,
+6 frontend tests, type checking, lint, and the production build.
+
 Manual browser acceptance: sign in, search/open a product, add and edit items, verify unavailable items are greyed out,
 checkout, inspect history, and check keyboard access and mobile widths. A browser connection is needed for visual checks.
 
@@ -249,7 +266,8 @@ checkout, inspect history, and check keyboard access and mobile widths. A browse
 mandai-assessment/
 ├── apps/
 │   ├── web/              # Next.js storefront, cart, orders and admin
-│   └── api/              # generated Express app adapted to TypeScript
+│   └── api/              # Express API with TypeScript
+├── test-products/        # demo catalog manifest and source images
 ├── prisma/               # schema and checked-in SQL migrations
 ├── prisma7.config.ts
 ├── DESIGN.md
@@ -263,15 +281,14 @@ mandai-assessment/
 
 ## Design
 
-[DESIGN.md](./DESIGN.md) is the visual source of truth. It
-adapts [the Linear-inspired reference](https://github.com/VoltAgent/awesome-design-md/blob/main/design-md/linear.app/DESIGN.md)
-into a restrained dark dashboard and storefront with subtle borders, deliberate spacing, clear status, and a limited
-lavender accent. The UI uses a system font stack and the project’s own product layout.
+[DESIGN.md](./DESIGN.md) describes the shared visual styling: warm light surfaces, dark green accents,
+subtle borders, readable inventory tables, and explicit stock labels. The UI uses a system font fallback and shared
+CSS and Tailwind tokens.
 
-## Trade-offs and roadmap
+## Trade-offs and scope
 
 This is a modular monolith with one relational database. Prisma handles standard data access; parameterized SQL
-expresses the inventory-critical update. Soft deletion preserves order history. Token revocation, rate limiting, inventory reservations and payment are deferred. Checkout idempotency is implemented. Testing details are in [ARCHITECTURE.md](./ARCHITECTURE.md#12-testing-strategy-and-roadmap). The project repository
+expresses the inventory-critical update. Soft deletion preserves order history. Checkout uses idempotency keys. Token revocation, rate limiting, inventory reservations, and payment are outside the current scope. Testing details are in [ARCHITECTURE.md](./ARCHITECTURE.md#12-testing-strategy). The project repository
 is [jieshenghow/mandai](https://github.com/jieshenghow/mandai).
 
 ## Frontend POST requests
@@ -282,7 +299,7 @@ the form to display. Mutations do not automatically retry. Logout clears the que
 login.
 
 For a new POST action, call `postApi<Result>("/api/your-endpoint", input)` from a `useMutation` mutation function, use
-`isPending` to disable duplicate submission, and show `error.message` on failure. When a future mutation changes cached
+`isPending` to disable duplicate submission, and show `error.message` on failure. When a mutation changes cached
 product data, invalidate the corresponding query key in `onSuccess`. The server route guard continues to use server-side
 fetch.
 
@@ -307,11 +324,13 @@ instances must share that directory. Uploaded files are excluded from Git; they 
 
 Each product supports 0–8 images, up to 5 MB per input file, in JPG/PNG/WebP format. Animated files and images over
 40 megapixels are rejected. The API decodes and re-encodes images as WebP, stripping metadata. Images are read via
-the product-image API: images attached to active products are public; unattached previews require their uploading ADMIN session. Unattached uploads and removed
+the product-image API: images attached to active products are public; unattached previews require their uploading ADMIN session.
+For unattached previews, other authenticated accounts receive 404 and guests receive 401. Archived-product images return
+404. Image responses use `Cache-Control: private, no-store`. Unattached uploads and removed
 images expire after 24 hours and are cleaned on API startup and hourly. Archived product images remain stored.
 After interrupted uploads, orphan file cleanup runs on the same schedule. No cloud account is required.
 
-### Added API contracts
+### Inventory API contracts
 
 All admin endpoints require `ADMIN`. JSON responses retain `{data}` / `{error,message,details?}` envelopes.
 
@@ -330,10 +349,4 @@ on PATCH to preserve the gallery. When supplied, imageIds is the complete ordere
 cover chooses the first remaining image. Empty galleries have a null cover. Stock adjustments return `409 STOCK_LIMIT`
 when inventory would leave 0–1,000,000. Successful adjustments and purchases increment stockVersion. Purchases append stock movements and PURCHASE product logs.
 
-### Verification
-
-`pnpm test` creates isolated PostgreSQL databases and applies migrations without changing development data. The database
-user needs CREATE DATABASE permission. Tests cover permissions, CRUD, image validation/ownership/cleanup, log filters,
-concurrent last-unit stock-out and transactional rollback when audit insertion fails. `pnpm typecheck`, `pnpm lint`, and
-`pnpm --filter @mandai/web build` provide static/build checks. Browser visual, keyboard and responsive checks should be
-performed against the running app; they are not automated by the current suite.
+See [Testing](#testing) for integration coverage, database requirements, and manual browser acceptance.

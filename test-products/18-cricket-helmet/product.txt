@@ -1,0 +1,7 @@
+Name: Cricket Helmet
+SKU: TEST-018
+Description: Sample listing for upload testing: Cricket Helmet.
+Sample price: 44.99
+Stock: 100
+Category: sports-accessories
+Images 01–04: gallery. Image 05: thumbnail.

@@ -1,0 +1,7 @@
+Name: Sports Sneakers Off White Red
+SKU: TEST-016
+Description: Sample listing for upload testing: Sports Sneakers Off White Red.
+Sample price: 109.99
+Stock: 100
+Category: mens-shoes
+Images 01–04: gallery. Image 05: thumbnail.

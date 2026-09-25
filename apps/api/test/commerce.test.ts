@@ -619,7 +619,7 @@ test("customer-only purchasing and admin read-only paginated all-order access", 
     assert.equal(detail.requestHash, undefined);
     await admin.agent.get(`/api/admin/orders/${randomUUID()}`).expect(404);
     await admin.agent.get("/api/admin/orders?page=0").expect(400);
-    // Include a legacy admin-owned order: USER must not see it through either endpoint.
+    // Customer order endpoints must exclude orders owned by an administrator.
     const legacy = await db.order.create({data: {userId: admin.id, totalAmountCents: 1200}});
     await customer.agent.get(`/api/orders/${legacy.id}`).expect(404);
     await customer.agent.get(`/api/admin/orders/${legacy.id}`).expect(403);

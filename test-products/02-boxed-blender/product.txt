@@ -1,0 +1,7 @@
+Name: Boxed Blender
+SKU: TEST-002
+Description: Sample listing for upload testing: Boxed Blender.
+Sample price: 39.99
+Stock: 100
+Category: kitchen-accessories
+Images 01–04: gallery. Image 05: thumbnail.

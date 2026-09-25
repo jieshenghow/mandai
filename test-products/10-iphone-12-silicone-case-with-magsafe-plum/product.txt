@@ -1,0 +1,7 @@
+Name: iPhone 12 Silicone Case with MagSafe Plum
+SKU: TEST-010
+Description: Sample listing for upload testing: iPhone 12 Silicone Case with MagSafe Plum.
+Sample price: 29.99
+Stock: 100
+Category: mobile-accessories
+Images 01–04: gallery. Image 05: thumbnail.

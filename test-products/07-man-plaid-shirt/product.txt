@@ -1,0 +1,7 @@
+Name: Man Plaid Shirt
+SKU: TEST-007
+Description: Sample listing for upload testing: Man Plaid Shirt.
+Sample price: 34.99
+Stock: 100
+Category: mens-shirts
+Images 01–04: gallery. Image 05: thumbnail.
