@@ -26,6 +26,15 @@
 }
 
 @layer base {
+    html {
+        scrollbar-gutter: stable;
+    }
+
+    /* Keep the page locked until the last modal (including nested ones) closes. */
+    html:has(dialog:modal) {
+        overflow: hidden;
+    }
+
     p {
         @apply leading-[1.6];
     }
@@ -47,7 +56,7 @@
     .btn-danger { @apply border-danger-border text-danger; }
     .field { @apply block w-full rounded-lg border border-border-strong bg-surface-1 px-3 py-2 text-sm text-text; }
     .field-label { @apply mb-2 block text-sm text-text-muted; }
-    .product-dialog { @apply fixed m-auto max-h-[90svh] w-[calc(100%_-_2rem)] max-w-3xl overflow-y-auto rounded-xl border border-border-strong bg-surface-1 p-0 text-text; }
+    .product-dialog { @apply fixed m-auto max-h-[90svh] w-[calc(100%_-_2rem)] max-w-3xl overflow-y-auto overscroll-contain rounded-xl border border-border-strong bg-surface-1 p-0 text-text; }
     .product-dialog::backdrop { background: rgb(30 27 25 / 40%); }
     .inventory-table { @apply w-full text-left text-sm; }
     .inventory-table th { @apply whitespace-nowrap border-b border-border px-4 py-3 font-medium text-text-subtle; }
