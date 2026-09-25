@@ -128,7 +128,7 @@ export function Feedback({ error }: { error: Error | null | undefined }) {
 export function Status({ stock }: { stock: number }) {
     return (
         <span
-            className={`rounded-md border px-2 py-1 text-xs ${stock === 0 ? "border-danger-border text-danger" : stock <= 5 ? "border-amber-900 text-amber-300" : "border-emerald-900 text-emerald-300"}`}
+            className={`rounded-md border px-2 py-1 text-xs ${stock === 0 ? "border-danger-border text-danger" : stock <= 5 ? "border-warning-border text-warning" : "border-success-border text-success"}`}
         >
             {stock === 0 ? "Sold Out" : stock <= 5 ? "Low Stock" : "In Stock"}
         </span>

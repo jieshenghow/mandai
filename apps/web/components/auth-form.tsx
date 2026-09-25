@@ -36,7 +36,7 @@ export function AuthForm({mode}: { mode: "login" | "register" }) {
                     href="/"
                     className="flex items-center gap-2.5 text-[16px] font-semibold"
                 >
-          <span className="grid size-7 place-items-center rounded-lg bg-accent text-[14px]">
+          <span className="grid size-7 place-items-center rounded-lg bg-accent text-[14px] text-white">
             M
           </span>{" "}
                     Mandai

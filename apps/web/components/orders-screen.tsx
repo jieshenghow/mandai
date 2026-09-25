@@ -106,7 +106,7 @@ export function OrderDetails({id, admin = false}: { id: string; admin?: boolean 
             )}
             {order && (
                 <section className="mt-8 rounded-xl border border-border bg-surface-1 p-6 sm:p-8">
-                    <p className="text-sm text-emerald-300">Order confirmed</p>
+                    <p className="text-sm text-success">Order confirmed</p>
                     <h1 className="mt-3 text-3xl font-semibold">
                         {admin ? "Order details" : "Thank you for your order."}
                     </h1>

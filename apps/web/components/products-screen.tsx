@@ -76,7 +76,7 @@ export function ProductsScreen() {
                 ))}
             </div>
             {message && (
-                <p role="status" className="mb-4 text-sm text-emerald-300">
+                <p role="status" className="mb-4 text-sm text-success">
                     {message}
                 </p>
             )}
@@ -460,7 +460,7 @@ function ProductDetail({
                                     <strong
                                         className={
                                             m.delta > 0
-                                                ? "text-emerald-300"
+                                                ? "text-success"
                                                 : "text-danger"
                                         }
                                     >

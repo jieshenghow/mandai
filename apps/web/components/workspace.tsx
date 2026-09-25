@@ -46,7 +46,7 @@ export function Workspace({admin = false, children, section = "Overview"}: { adm
                         href="/admin"
                         className="mx-2 mb-9 flex items-center gap-2.5 text-[16px] font-semibold max-[641px]:mx-0 max-[641px]:mb-3"
                     >
-            <span className="grid size-7 place-items-center rounded-lg bg-accent text-[14px]">
+            <span className="grid size-7 place-items-center rounded-lg bg-accent text-[14px] text-white">
               M
             </span>{" "}
                         Mandai

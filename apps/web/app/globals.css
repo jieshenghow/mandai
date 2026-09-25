@@ -2,22 +2,27 @@
 
 @theme {
     --font-sans: Inter, Geist, system-ui, sans-serif;
-    --color-canvas: #010102;
-    --color-surface-1: #0f1011;
-    --color-surface-2: #141516;
-    --color-surface-3: #18191a;
-    --color-border: #23252a;
-    --color-border-strong: #34343a;
-    --color-text: #f7f8f8;
-    --color-text-muted: #d0d6e0;
-    --color-text-subtle: #8a8f98;
-    --color-accent: #5e6ad2;
-    --color-accent-hover: #828fff;
-    --color-accent-button-hover: #6c78dd;
-    --color-focus: #5e69d1;
-    --color-danger: #f1a5aa;
-    --color-danger-surface: #29171b;
-    --color-danger-border: #593038;
+    /* Palette from Stitch project 6844272699315330931. */
+    --color-canvas: #fff8f5;
+    --color-surface-1: #ffffff;
+    --color-surface-2: #faf2ee;
+    --color-surface-3: #f4ece8;
+    --color-border: #e9e1dd;
+    --color-border-strong: #c1c8c3;
+    --color-text: #1e1b19;
+    --color-text-muted: #424844;
+    --color-text-subtle: #625e59;
+    --color-accent: #112e23;
+    --color-accent-hover: #284438;
+    --color-accent-button-hover: #284438;
+    --color-focus: #486457;
+    --color-danger: #ba1a1a;
+    --color-danger-surface: #ffdad6;
+    --color-danger-border: #ba1a1a;
+    --color-success: #304c40;
+    --color-success-border: #486457;
+    --color-warning: #613d3c;
+    --color-warning-border: #cd9e9c;
 }
 
 @layer base {
@@ -32,7 +37,7 @@
     }
 
     :focus-visible {
-        @apply outline-2 outline-offset-4 outline-accent-hover;
+        @apply outline-2 outline-offset-4 outline-focus;
     }
 }
 
@@ -43,7 +48,7 @@
     .field { @apply block w-full rounded-lg border border-border-strong bg-surface-1 px-3 py-2 text-sm text-text; }
     .field-label { @apply mb-2 block text-sm text-text-muted; }
     .product-dialog { @apply fixed m-auto max-h-[90svh] w-[calc(100%_-_2rem)] max-w-3xl overflow-y-auto rounded-xl border border-border-strong bg-surface-1 p-0 text-text; }
-    .product-dialog::backdrop { background: rgb(0 0 0 / 75%); }
+    .product-dialog::backdrop { background: rgb(30 27 25 / 40%); }
     .inventory-table { @apply w-full text-left text-sm; }
     .inventory-table th { @apply whitespace-nowrap border-b border-border px-4 py-3 font-medium text-text-subtle; }
     .inventory-table td { @apply border-b border-border px-4 py-4; }

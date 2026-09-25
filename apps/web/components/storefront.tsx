@@ -118,7 +118,7 @@ export function AddToCart({ product }: { product: StoreProduct }) {
             </div>
             <Feedback error={mutation.error} />
             {added && (
-                <p role="status" className="mt-3 text-sm text-emerald-300">
+                <p role="status" className="mt-3 text-sm text-success">
                     Added to cart.{" "}
                     <Link href="/cart" className="underline">
                         View cart →

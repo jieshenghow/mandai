@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({children}: LayoutProps<"/">) {
     return (
-        <html lang="en" className="scheme-dark">
+        <html lang="en" className="scheme-light">
         <body className="bg-canvas font-sans text-[14px] text-text">
         <QueryProvider>{children}</QueryProvider>
         </body>
