@@ -1,0 +1,24 @@
+{
+  "name": "mandai-assessment",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Product management take-home assignment",
+  "packageManager": "pnpm@12.6.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @mandai/web --filter @mandai/api dev",
+    "dev:web": "pnpm --filter @mandai/web dev",
+    "dev:api": "pnpm --filter @mandai/api dev",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "db:status": "prisma migrate status",
+    "lint": "pnpm --filter @mandai/web lint",
+    "typecheck": "pnpm --filter @mandai/api --filter @mandai/web typecheck",
+    "db:seed": "pnpm --filter @mandai/api seed",
+    "test": "pnpm --filter @mandai/api --filter @mandai/web test"
+  },
+  "devDependencies": {
+    "dotenv": "^18.0.3",
+    "prisma": "^7.10.0"
+  }
+}

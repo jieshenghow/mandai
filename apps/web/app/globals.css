@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+    --font-sans: Inter, Geist, system-ui, sans-serif;
+    --color-canvas: #010102;
+    --color-surface-1: #0f1011;
+    --color-surface-2: #141516;
+    --color-surface-3: #18191a;
+    --color-border: #23252a;
+    --color-border-strong: #34343a;
+    --color-text: #f7f8f8;
+    --color-text-muted: #d0d6e0;
+    --color-text-subtle: #8a8f98;
+    --color-accent: #5e6ad2;
+    --color-accent-hover: #828fff;
+    --color-accent-button-hover: #6c78dd;
+    --color-focus: #5e69d1;
+    --color-danger: #f1a5aa;
+    --color-danger-surface: #29171b;
+    --color-danger-border: #593038;
+}
+
+@layer base {
+    p {
+        @apply leading-[1.6];
+    }
+
+    button,
+    a,
+    input {
+        @apply transition-[background-color, border-color] duration-150 ease-linear motion-reduce:transition-none;
+    }
+
+    :focus-visible {
+        @apply outline-2 outline-offset-4 outline-accent-hover;
+    }
+}

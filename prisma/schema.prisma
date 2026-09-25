@@ -1,0 +1,69 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../apps/api/src/generated/prisma"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  USER
+
+  @@map("user_role")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  orders       Order[]
+
+  @@map("tbl_user")
+}
+
+model Product {
+  id           String      @id @default(uuid()) @db.Uuid
+  name         String      @db.VarChar(120)
+  description  String      @default("") @db.VarChar(2000)
+  priceCents   Int         @map("price_cents")
+  stock        Int
+  stockVersion Int         @default(0) @map("stock_version")
+  deletedAt    DateTime?   @map("deleted_at") @db.Timestamptz(6)
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  orderItems   OrderItem[]
+
+  @@map("tbl_product")
+}
+
+model Order {
+  id               String      @id @default(uuid()) @db.Uuid
+  userId           String      @map("user_id") @db.Uuid
+  totalAmountCents Int         @map("total_amount_cents")
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  user             User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items            OrderItem[]
+
+  @@index([userId])
+  @@map("tbl_order")
+}
+
+model OrderItem {
+  id             String  @id @default(uuid()) @db.Uuid
+  orderId        String  @map("order_id") @db.Uuid
+  productId      String  @map("product_id") @db.Uuid
+  quantity       Int
+  unitPriceCents Int     @map("unit_price_cents")
+  order          Order   @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  product        Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("tbl_order_item")
+}

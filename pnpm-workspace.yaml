@@ -1,0 +1,10 @@
+packages:
+  - "apps/*"
+
+# Allow the compiler and Prisma install scripts; Next's optional native builds stay disabled.
+allowBuilds:
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true
+  sharp: false
+  unrs-resolver: false

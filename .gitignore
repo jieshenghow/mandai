@@ -1,0 +1,17 @@
+node_modules/
+.next/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+
+
+/apps/api/src/generated/prisma
+
+# Local editor and TypeScript build state
+.idea/
+.vscode/
+*.tsbuildinfo
+.DS_Store
