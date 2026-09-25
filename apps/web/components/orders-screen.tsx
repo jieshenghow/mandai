@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api, money, time } from "@/lib/products";
-import type { Order, OrderPage } from "@/lib/commerce";
-import { Feedback } from "./product-ui";
-import { freshQueries } from "./storefront";
-export function OrdersScreen({ admin = false }: { admin?: boolean }) {
+import {useState} from "react";
+import {useQuery} from "@tanstack/react-query";
+import {api, money, time} from "@/lib/products";
+import type {Order, OrderPage} from "@/lib/commerce";
+import {Feedback} from "./product-ui";
+import {freshQueries} from "./storefront";
+
+export function OrdersScreen({admin = false}: { admin?: boolean }) {
     const base = admin ? "/admin/orders" : "/orders";
     const [page, setPage] = useState(1);
     const query = useQuery({
@@ -20,7 +21,7 @@ export function OrdersScreen({ admin = false }: { admin?: boolean }) {
             <p className="mb-8 mt-3 text-text-subtle">
                 {admin ? "Read-only customer purchase history." : "A record of your purchases."}
             </p>
-            <Feedback error={query.error} />
+            <Feedback error={query.error}/>
             {query.isPending && <p role="status">Loading orders…</p>}
             {query.data?.total === 0 && (
                 <p className="rounded-xl border border-border p-10 text-center text-text-subtle">
@@ -83,7 +84,8 @@ export function OrdersScreen({ admin = false }: { admin?: boolean }) {
         </>
     );
 }
-export function OrderDetails({ id, admin = false }: { id: string; admin?: boolean }) {
+
+export function OrderDetails({id, admin = false}: { id: string; admin?: boolean }) {
     const base = admin ? "/admin/orders" : "/orders";
     const query = useQuery({
         queryKey: [base, id],
@@ -96,7 +98,7 @@ export function OrderDetails({ id, admin = false }: { id: string; admin?: boolea
             <Link href={base} className="text-text-subtle">
                 ← All orders
             </Link>
-            <Feedback error={query.error} />
+            <Feedback error={query.error}/>
             {query.isPending && (
                 <p role="status" className="mt-6">
                     Loading order…
@@ -142,9 +144,12 @@ export function OrderDetails({ id, admin = false }: { id: string; admin?: boolea
                     <p className="mt-5 text-sm text-text-subtle">
                         {admin ? "Purchase completed. This order is read-only." : "Your purchase is complete. No payment was collected for this demo."}
                     </p>
-                    <Link href="/" className="btn mt-6">
-                        Continue shopping
-                    </Link>
+                    {
+                        !admin && <Link href="/" className="btn mt-6">
+                            Continue shopping
+                        </Link>
+                    }
+
                 </section>
             )}
         </>
