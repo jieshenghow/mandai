@@ -1,3 +1,4 @@
+import {cleanupImages} from "./products.ts";
 import app from "./app.ts";
 
 const port = Number(process.env.API_PORT ?? 4000);
@@ -9,3 +10,6 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 app.listen(port, () => {
     console.log(`API listening on http://localhost:${port}`);
 });
+
+void cleanupImages().catch(console.error);
+setInterval(() => { void cleanupImages().catch(console.error); }, 60 * 60 * 1000).unref();

@@ -1,7 +1,7 @@
 # Product Specification
 
-> **Status:** Planned behavior and acceptance criteria. The web/API scaffolds and initial database tables exist, but the
-> product features are not implemented yet.
+> **Status:** Authentication and admin product management are implemented, including multi-image uploads, stock movements
+> and product change logs. Storefront UI and purchasing remain planned.
 
 This document defines **what Mandai Assessment must do** and how to tell whether it is
 complete. [ARCHITECTURE.md](./ARCHITECTURE.md) explains **how** the system will meet these
@@ -68,11 +68,11 @@ displays.
 ### 3.4 Admin inventory
 
 1. An admin can view an inventory table with product, price, current stock, derived status, and actions.
-2. An admin can create a product, edit its fields, change stock through the product edit form, and archive it.
+2. An admin can create a product, edit its fields, adjust stock through separate stock-in/out dialogs, and archive it.
 3. Archiving removes a product from public and active admin lists and prevents later purchases. Existing order items
    remain valid.
-4. A stock edit based on a stale `stockVersion` returns `409 PRODUCT_CHANGED`. The UI prompts the admin to reload
-   current data rather than silently replacing a purchase decrement or another stock edit.
+4. Stock adjustments apply a positive quantity and IN/OUT direction to the current locked row, never overwrite an
+   absolute stock count. Out-of-bounds adjustments return `409 STOCK_LIMIT`. Successful changes increment `stockVersion`.
 5. Product changes, including stock changes, must be validated and authorized by the API.
 
 ## 4. Planned pages
@@ -85,8 +85,9 @@ displays.
 | `/register`            | Registration form and validation feedback                     |
 | `/admin`               | Inventory summary and path to product management              |
 | `/admin/products`      | Table-oriented inventory list and create/edit/archive actions |
-| `/admin/products/new`  | Product creation form                                         |
-| `/admin/products/[id]` | Product edit form with current stock version                  |
+| `/admin/product-logs` | Filtered, paginated read-only product change history           |
+
+Create, view and edit forms are dialogs on `/admin/products`, not separate routes.
 
 The web app should share layout and form/table primitives rather than duplicate page styling.
 Follow [DESIGN.md](./DESIGN.md) for colors, spacing, type, surfaces, focus states, and responsive behavior. The admin
@@ -132,8 +133,8 @@ with optional safe validation details. Route parameters and request bodies are v
 | GET    | `/api/products/:id`       | Authenticated | —                                                                                   | `200`, active product                       |
 | GET    | `/api/admin/products`     | `ADMIN`       | —                                                                                   | `200`, active inventory with `stockVersion` |
 | GET    | `/api/admin/products/:id` | `ADMIN`       | —                                                                                   | `200`, product with `stockVersion`          |
-| POST   | `/api/admin/products`     | `ADMIN`       | `{name, description, priceCents, stock}`                                            | `201`, created product                      |
-| PATCH  | `/api/admin/products/:id` | `ADMIN`       | One or more product fields; `expectedStockVersion` required when `stock` is present | `200`, updated product                      |
+| POST   | `/api/admin/products`     | `ADMIN`       | `{name, description, priceCents, stock, imageIds?, coverImageId?}`                                            | `201`, created product                      |
+| PATCH  | `/api/admin/products/:id` | `ADMIN`       | Metadata/image selection only; stock is adjusted through the stock-movements endpoint | `200`, updated product                      |
 | DELETE | `/api/admin/products/:id` | `ADMIN`       | —                                                                                   | `200`, archived product summary             |
 | POST   | `/api/products/:id/buy`   | Authenticated | `{quantity}`                                                                        | `201`, order receipt                        |
 
@@ -172,3 +173,13 @@ The assignment is complete when:
 No cart, payment gateway, shipping, coupons, categories, Redis, Kafka, queues, microservices, event sourcing, CQRS, or
 Kubernetes. Search, pagination, order history, idempotency keys, rate limiting, refresh token rotation, and deployment
 automation are optional future work. Do not expand scope until the required flows and concurrency test are complete.
+
+## Implemented admin extensions
+
+The API contracts, image storage rules and operator log behavior in [README.md](./README.md#product-management) are
+part of this specification. Each product has 0–8 local images with an explicit cover. Stock-in/out requires quantity
+and reason and produces an immutable application-level movement record. Product changes append actor/time/target and
+before/after values transactionally; no-op edits, failed requests and account/view actions are excluded. Archived
+products remain visible through the global product log. Existing references to stale absolute stock edits in the
+purchase roadmap are superseded by incremental stock adjustments; the future purchase path must still increment
+stockVersion. Purchase implementation and its concurrency test remain outside this admin delivery.

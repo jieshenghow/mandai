@@ -1,11 +1,11 @@
 "use client";
 import Link from "next/link";
-import {useEffect, useState} from "react";
+import {useEffect, useState, type ReactNode} from "react";
 import type {User} from "@/lib/route-access";
 import {useMutation, useQueryClient} from "@tanstack/react-query";
 import {postApi} from "@/lib/api";
 
-export function Workspace({admin = false}: { admin?: boolean }) {
+export function Workspace({admin = false, children, section = "Overview"}: { admin?: boolean; children?: ReactNode; section?: string }) {
     const [user, setUser] = useState<User | null>(null);
     const [error, setError] = useState("");
     const queryClient = useQueryClient();
@@ -62,11 +62,13 @@ export function Workspace({admin = false}: { admin?: boolean }) {
                     </p>
                     <Link
                         href="/admin"
-                        className="rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-text-muted"
-                        aria-current="page"
+                        className="rounded-lg px-3 py-2.5 text-text-muted aria-[current=page]:bg-surface-2"
+                        aria-current={section === "Overview" ? "page" : undefined}
                     >
                         Overview
                     </Link>
+                    <Link href="/admin/products" className="rounded-lg px-3 py-2.5 text-text-muted aria-[current=page]:bg-surface-2" aria-current={section === "Products" ? "page" : undefined}>Products</Link>
+                    <Link href="/admin/product-logs" className="rounded-lg px-3 py-2.5 text-text-muted aria-[current=page]:bg-surface-2" aria-current={section === "Product logs" ? "page" : undefined}>Product logs</Link>
                     <Link href="/" className="rounded-lg px-3 py-2.5 text-text-muted">
                         Member workspace ↗
                     </Link>
@@ -79,7 +81,7 @@ export function Workspace({admin = false}: { admin?: boolean }) {
                 <header
                     className="flex min-h-18 items-center justify-between gap-4 border-b border-border px-8 py-4 text-[13px] text-text-subtle max-[641px]:flex-wrap max-[641px]:px-4">
           <span>
-            {admin ? "Administration / Overview" : "Mandai / Workspace"}
+            {admin ? `Administration / ${section}` : "Mandai / Workspace"}
           </span>
                     <div className="flex flex-wrap items-center gap-4">
                         {user?.role === "ADMIN" && !admin && (
@@ -95,6 +97,7 @@ export function Workspace({admin = false}: { admin?: boolean }) {
                     </div>
                 </header>
                 <main className="mx-auto max-w-260 px-8 py-12 max-[641px]:px-4 max-[641px]:py-8">
+                    {children ?? <>
                     <p className="mb-3 text-[11px] font-semibold tracking-[1.5px] text-text-subtle">
                         {admin ? "ADMINISTRATION" : "YOUR WORKSPACE"}
                     </p>
@@ -143,14 +146,16 @@ export function Workspace({admin = false}: { admin?: boolean }) {
               ▦
             </span>
                         <h2 className="text-[20px] font-semibold">
-                            {admin ? "Inventory, coming next" : "Your workspace is ready"}
+                            {admin ? "Manage your inventory" : "Your workspace is ready"}
                         </h2>
                         <p className="text-text-subtle">
                             {admin
-                                ? "Product management will appear here when it’s available."
+                                ? "Create products, manage stock and review product changes."
                                 : "Products and purchasing will be available here soon."}
                         </p>
+                        {admin && <Link href="/admin/products" className="mt-4 inline-block text-accent-hover">Open products →</Link>}
                     </section>
+                    </>}
                 </main>
             </div>
         </div>

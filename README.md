@@ -4,7 +4,7 @@ A small full-stack product management take-home: one customer storefront, one ad
 whose purchase flow is designed to prevent overselling.
 
 > **Current state:** Login, registration, logout, JWT cookie sessions, page route protection, role checks, and demo
-> accounts are implemented. Every business page requires authentication. Product management and purchasing remain planned.
+> accounts are implemented. Admin product management, local image uploads, stock movements and product change logs are also implemented. Every business page requires authentication. Storefront UI and purchasing remain planned.
 
 ## Features
 
@@ -16,7 +16,9 @@ whose purchase flow is designed to prevent overselling.
 ### Admin
 
 - Protected inventory overview with product, price, stock, status, and actions.
-- Create, edit, and archive products. Stock edits detect a stale form after another stock change.
+- Create, view, edit and archive products in dialogs. Upload up to 8 images and select/reorder the cover.
+- Separate stock-in/out adjustments with reasons, operator identity and history.
+- Read-only product logs show field-level before/after values, including archived products.
 
 ### Backend and correctness
 
@@ -25,7 +27,7 @@ whose purchase flow is designed to prevent overselling.
   together.
 - A database `CHECK (stock >= 0)` and a real PostgreSQL concurrency test provide defense and evidence.
 
-These are the implementation targets. They are not presented as completed functionality yet.
+The storefront and purchase transaction above remain implementation targets. Admin product and stock management are implemented and integration-tested.
 
 ## Tech stack
 
@@ -35,7 +37,7 @@ These are the implementation targets. They are not presented as completed functi
 | API           | Node.js, Express, TypeScript, Zod                                   |
 | Data          | PostgreSQL, Prisma ORM, focused parameterized SQL                   |
 | Auth          | JWT in an HttpOnly cookie, bcrypt, `ADMIN` and `USER` roles         |
-| Tests         | Vitest or Jest, Supertest, real PostgreSQL for purchase concurrency |
+| Tests         | Node test runner, Supertest, isolated real PostgreSQL databases |
 | Local tooling | pnpm workspaces, Docker Compose                                     |
 
 ## Architecture
@@ -59,14 +61,14 @@ criteria; [ARCHITECTURE.md](./ARCHITECTURE.md) explains the database model, tran
 - pnpm (Corepack is fine)
 - Docker with Compose
 
-### Run the current scaffold
+### Run locally
 
 ```bash
 cd mandai-assessment
 cp .env.example .env
 docker compose up -d
 pnpm install
-pnpm db:migrate
+pnpm db:deploy
 pnpm db:generate
 pnpm dev
 ```
@@ -266,3 +268,55 @@ For a new POST action, call `postApi<Result>("/api/your-endpoint", input)` from 
 `isPending` to disable duplicate submission, and show `error.message` on failure. When a future mutation changes cached
 product data, invalidate the corresponding query key in `onSuccess`. The server route guard continues to use server-side
 fetch.
+
+## Product management
+
+Sign in as an administrator and open `/admin/products`. Use **Add product**, **View**, **Edit**, **Stock in**,
+**Stock out**, or **Delete**. Delete archives the product; it does not erase orders or history. Initial stock is
+entered during creation. Later changes use positive adjustment quantities and a required reason, never an absolute
+stock overwrite. The API locks the product row and writes inventory, movement and change log in one transaction.
+
+`/admin/product-logs` shows successful product changes only: creation, edits, images/cover/order, stock adjustments and
+archiving. Filter by product name, operator email, action and date; pages contain 20 records. Product details also
+include this history. Operator identity comes from the authenticated server session. Failed actions, browsing,
+login/logout and abandoned uploads are not logged. Logs have no mutation endpoint. Snapshots retain operator email
+and product name; image changes retain image IDs rather than permanent copies of removed image bytes.
+
+### Local image storage
+
+Uploads are written to `<repository>/uploads` by default. Set `UPLOAD_DIR` to an absolute writable directory to override.
+In deployment, mount this directory on persistent storage and back it up together with PostgreSQL. Multiple API
+instances must share that directory. Uploaded files are excluded from Git; they are not stored in Next.js `public`.
+
+Each product supports 0–8 images, up to 5 MB per input file, in JPG/PNG/WebP format. Animated files and images over
+40 megapixels are rejected. The API decodes and re-encodes images as WebP, stripping metadata. Images are read via
+an authenticated API route; unattached previews are restricted to their uploader. Unattached uploads and removed
+images expire after 24 hours and are cleaned on API startup and hourly. Archived product images remain stored.
+After interrupted uploads, orphan file cleanup runs on the same schedule. No cloud account is required.
+
+### Added API contracts
+
+All admin endpoints require `ADMIN`. JSON responses retain `{data}` / `{error,message,details?}` envelopes.
+
+| Method | Endpoint | Input / behavior |
+|---|---|---|
+| GET | `/api/products`, `/api/products/:id` | Authenticated active product reads; omit stock version |
+| GET/POST | `/api/admin/products` | List / create; create accepts name, description, priceCents, stock, imageIds, coverImageId |
+| GET/PATCH/DELETE | `/api/admin/products/:id` | Read / edit metadata and image selection / archive; PATCH rejects stock |
+| POST | `/api/admin/product-images` | Multipart field `image`, one file; returns id and authenticated URL |
+| GET | `/api/product-images/:id` | Authenticated image bytes |
+| GET/POST | `/api/admin/products/:id/stock-movements` | History / `{type:"IN" or "OUT", quantity, reason}` |
+| GET | `/api/admin/product-logs` | Optional productId, product (name), actor (email), action, from/to (ISO timestamp), page |
+
+An image must belong to the product or be an unattached upload owned by the current administrator. Omit imageIds
+on PATCH to preserve the gallery. When supplied, imageIds is the complete ordered selection; removing the current
+cover chooses the first remaining image. Empty galleries have a null cover. Stock adjustments return `409 STOCK_LIMIT`
+when inventory would leave 0–1,000,000. Successful adjustments increment stockVersion for future purchase compatibility.
+
+### Verification
+
+`pnpm test` creates isolated PostgreSQL databases and applies migrations without changing development data. The database
+user needs CREATE DATABASE permission. Tests cover permissions, CRUD, image validation/ownership/cleanup, log filters,
+concurrent last-unit stock-out and transactional rollback when audit insertion fails. `pnpm typecheck`, `pnpm lint`, and
+`pnpm --filter @mandai/web build` provide static/build checks. Browser visual, keyboard and responsive checks should be
+performed against the running app; they are not automated by the current suite.

@@ -1,0 +1,320 @@
+import { test, after } from "node:test";
+import assert from "node:assert/strict";
+import { readFile, readdir, mkdtemp, rm, access } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import pg from "pg";
+import request from "supertest";
+import sharp from "sharp";
+
+const sourceUrl = new URL(process.env.DATABASE_URL!);
+const databaseName = `mandai_products_test_${process.pid}_${Date.now()}`;
+const control = new pg.Client({ connectionString: sourceUrl.toString() });
+await control.connect();
+await control.query(`CREATE DATABASE "${databaseName}"`);
+sourceUrl.pathname = `/${databaseName}`;
+process.env.DATABASE_URL = sourceUrl.toString();
+process.env.UPLOAD_DIR = await mkdtemp(join(tmpdir(), "mandai-images-"));
+const setup = new pg.Client({ connectionString: sourceUrl.toString() });
+await setup.connect();
+const migrations = new URL("../../../prisma/migrations/", import.meta.url);
+for (const name of (await readdir(migrations))
+    .filter((n) => /^\d/.test(n))
+    .sort())
+    await setup.query(
+        await readFile(new URL(`${name}/migration.sql`, migrations), "utf8"),
+    );
+const { default: app } = await import("../src/app.ts");
+const { db } = await import("../src/db.ts");
+const { cleanupImages } = await import("../src/products.ts");
+after(async () => {
+    await db.$disconnect();
+    await setup.end();
+    await control.query(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
+    await control.end();
+    await rm(process.env.UPLOAD_DIR!, { recursive: true, force: true });
+});
+async function account(email: string, admin = false) {
+    const agent = request.agent(app);
+    const response = await agent
+        .post("/api/auth/register")
+        .send({ email, password: "Password123!" })
+        .expect(201);
+    if (admin)
+        await db.user.update({
+            where: { id: response.body.data.id },
+            data: { role: "ADMIN" },
+        });
+    return { agent, user: response.body.data };
+}
+const admin = await account("admin@example.com", true);
+const member = await account("member@example.com");
+const other = await account("other@example.com", true);
+const base = {
+    name: "Safari mug",
+    description: "Ceramic",
+    priceCents: 1200,
+    stock: 1,
+};
+const png = await sharp({
+    create: { width: 8, height: 8, channels: 3, background: "green" },
+})
+    .png()
+    .toBuffer();
+async function upload(agent = admin.agent) {
+    return (
+        await agent
+            .post("/api/admin/product-images")
+            .attach("image", png, "mug.png")
+            .expect(201)
+    ).body.data;
+}
+async function create(extra = {}) {
+    return (
+        await admin.agent
+            .post("/api/admin/products")
+            .send({ ...base, ...extra })
+            .expect(201)
+    ).body.data;
+}
+
+test("product CRUD, authorization, immutable actor, field diffs, no-op and archive history", async () => {
+    await request(app).get("/api/admin/products").expect(401);
+    await member.agent.post("/api/admin/products").send(base).expect(403);
+    await member.agent.get("/api/admin/product-logs").expect(403);
+    for (const extra of [
+        { stock: -1 },
+        { priceCents: 1.2 },
+        { name: " " },
+        { actorId: member.user.id },
+    ])
+        await admin.agent
+            .post("/api/admin/products")
+            .send({ ...base, ...extra })
+            .expect(400);
+    const p = await create();
+    await admin.agent.get("/api/admin/products/not-a-uuid").expect(400);
+    const publicRead = await member.agent
+        .get(`/api/products/${p.id}`)
+        .expect(200);
+    assert.equal(publicRead.body.data.stockVersion, undefined);
+    await admin.agent
+        .patch(`/api/admin/products/${p.id}`)
+        .send({ stock: 100 })
+        .expect(400);
+    await admin.agent
+        .patch(`/api/admin/products/${p.id}`)
+        .send({ name: "Updated mug", priceCents: 1500 })
+        .expect(200);
+    await admin.agent
+        .patch(`/api/admin/products/${p.id}`)
+        .send({ name: "Updated mug", priceCents: 1500 })
+        .expect(200);
+    const logs = await admin.agent
+        .get(`/api/admin/product-logs?productId=${p.id}`)
+        .expect(200);
+    assert.equal(logs.body.data.total, 2);
+    assert.equal(logs.body.data.items[0].actorId, admin.user.id);
+    assert.deepEqual(logs.body.data.items[0].changes.name, {
+        before: "Safari mug",
+        after: "Updated mug",
+    });
+    assert.deepEqual(logs.body.data.items[0].changes.priceCents, {
+        before: 1200,
+        after: 1500,
+    });
+    assert.equal(logs.body.data.items[0].changes.stock, undefined);
+    await admin.agent.delete(`/api/admin/products/${p.id}`).expect(200);
+    await admin.agent.get(`/api/admin/products/${p.id}`).expect(404);
+    await member.agent.get(`/api/products/${p.id}`).expect(404);
+    const list = await admin.agent.get("/api/admin/products").expect(200);
+    assert.ok(!list.body.data.some((row: { id: string }) => row.id === p.id));
+    const archived = await admin.agent
+        .get(`/api/admin/product-logs?productId=${p.id}&action=ARCHIVE`)
+        .expect(200);
+    assert.equal(archived.body.data.total, 1);
+    assert.equal(
+        archived.body.data.items[0].changes.snapshot.name,
+        "Updated mug",
+    );
+    const history = await admin.agent
+        .get(`/api/admin/products/${p.id}/stock-movements`)
+        .expect(200);
+    assert.equal(history.body.data.length, 1);
+    await admin.agent
+        .patch(`/api/admin/product-logs/${archived.body.data.items[0].id}`)
+        .send({ actorId: member.user.id })
+        .expect(404);
+});
+
+test("images: decoding, limits, ownership, cover/order, removal and temporary cleanup", async () => {
+    await member.agent
+        .post("/api/admin/product-images")
+        .attach("image", png, "mug.png")
+        .expect(403);
+    await admin.agent
+        .post("/api/admin/product-images")
+        .attach("image", Buffer.from("<script>bad</script>"), "fake.png")
+        .expect(400);
+    await admin.agent
+        .post("/api/admin/product-images")
+        .attach("image", Buffer.alloc(5 * 1024 * 1024 + 1), "large.png")
+        .expect(400);
+    const first = await upload(),
+        second = await upload();
+    await request(app).get(first.url).expect(401);
+    await other.agent.get(first.url).expect(404);
+    await admin.agent.get(first.url).expect(200).expect("Content-Type", /webp/);
+    await other.agent
+        .post("/api/admin/products")
+        .send({ ...base, imageIds: [first.id] })
+        .expect(400);
+    const p = await create({
+        imageIds: [first.id, second.id],
+        coverImageId: second.id,
+    });
+    assert.equal(p.coverImageId, second.id);
+    await member.agent.get(first.url).expect(200);
+    await admin.agent
+        .post("/api/admin/products")
+        .send({ ...base, imageIds: [first.id] })
+        .expect(400);
+    await admin.agent
+        .patch(`/api/admin/products/${p.id}`)
+        .send({ imageIds: [first.id, first.id] })
+        .expect(400);
+    await admin.agent
+        .patch(`/api/admin/products/${p.id}`)
+        .send({ imageIds: Array(9).fill(first.id) })
+        .expect(400);
+    await admin.agent
+        .patch(`/api/admin/products/${p.id}`)
+        .send({ imageIds: [first.id], coverImageId: second.id })
+        .expect(400);
+    const reordered = await admin.agent
+        .patch(`/api/admin/products/${p.id}`)
+        .send({ imageIds: [second.id, first.id], coverImageId: first.id })
+        .expect(200);
+    assert.deepEqual(
+        reordered.body.data.images.map((i: { id: string }) => i.id),
+        [second.id, first.id],
+    );
+    const removed = await admin.agent
+        .patch(`/api/admin/products/${p.id}`)
+        .send({ imageIds: [second.id] })
+        .expect(200);
+    assert.equal(removed.body.data.coverImageId, second.id);
+    const image = await db.productImage.update({
+        where: { id: first.id },
+        data: { createdAt: new Date(Date.now() - 25 * 3600000) },
+    });
+    await cleanupImages();
+    assert.equal(
+        await db.productImage.findUnique({ where: { id: first.id } }),
+        null,
+    );
+    await assert.rejects(access(join(process.env.UPLOAD_DIR!, image.filename)));
+    assert.ok(await db.productImage.findUnique({ where: { id: second.id } }));
+    await admin.agent
+        .patch(`/api/admin/products/${p.id}`)
+        .send({ imageIds: [], coverImageId: null })
+        .expect(200);
+});
+
+test("concurrent stock out: one success, no negative stock, matching movement and log", async () => {
+    const p = await create();
+    const path = `/api/admin/products/${p.id}/stock-movements`;
+    const input = { type: "OUT", quantity: 1, reason: "Damaged" };
+    const responses = await Promise.all([
+        admin.agent.post(path).send(input),
+        other.agent.post(path).send(input),
+    ]);
+    assert.deepEqual(responses.map((r) => r.status).sort(), [201, 409]);
+    const stored = await db.product.findUniqueOrThrow({ where: { id: p.id } });
+    assert.equal(stored.stock, 0);
+    assert.equal(stored.stockVersion, 1);
+    assert.equal(
+        await db.stockMovement.count({ where: { productId: p.id } }),
+        2,
+    );
+    assert.equal(await db.productLog.count({ where: { productId: p.id } }), 2);
+    const out = await db.productLog.findFirstOrThrow({
+        where: { productId: p.id, action: "STOCK_OUT" },
+    });
+    assert.ok(out.movementId);
+    await admin.agent
+        .post(path)
+        .send({ type: "IN", quantity: 3, reason: "Delivery" })
+        .expect(201);
+    for (const quantity of [0, -1, 0.5, 1000001])
+        await admin.agent
+            .post(path)
+            .send({ type: "IN", quantity, reason: "Delivery" })
+            .expect(400);
+    await admin.agent
+        .post(path)
+        .send({ type: "IN", quantity: 1000000, reason: "Too much" })
+        .expect(409);
+    await admin.agent
+        .post(path)
+        .send({ type: "IN", quantity: 1, reason: " " })
+        .expect(400);
+});
+
+test("audit failure rolls back product, stock and movement; pagination and filters", async () => {
+    const p = await create();
+    await setup.query(
+        `CREATE FUNCTION reject_test_log() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'audit unavailable'; END; $$; CREATE TRIGGER reject_log BEFORE INSERT ON tbl_product_log FOR EACH ROW EXECUTE FUNCTION reject_test_log();`,
+    );
+    try {
+        await admin.agent
+            .patch(`/api/admin/products/${p.id}`)
+            .send({ name: "Must roll back" })
+            .expect(500);
+        await admin.agent
+            .post(`/api/admin/products/${p.id}/stock-movements`)
+            .send({ type: "IN", quantity: 9, reason: "Must roll back" })
+            .expect(500);
+        assert.equal(
+            (await db.product.findUniqueOrThrow({ where: { id: p.id } })).stock,
+            1,
+        );
+        assert.equal(
+            (await db.product.findUniqueOrThrow({ where: { id: p.id } })).name,
+            base.name,
+        );
+        assert.equal(
+            await db.stockMovement.count({ where: { productId: p.id } }),
+            1,
+        );
+        assert.equal(
+            await db.productLog.count({ where: { productId: p.id } }),
+            1,
+        );
+    } finally {
+        await setup.query(
+            "DROP TRIGGER reject_log ON tbl_product_log; DROP FUNCTION reject_test_log();",
+        );
+    }
+    for (let i = 0; i < 21; i++)
+        await admin.agent
+            .patch(`/api/admin/products/${p.id}`)
+            .send({ description: `Edit ${i}` })
+            .expect(200);
+    const first = await admin.agent
+        .get(
+            `/api/admin/product-logs?productId=${p.id}&actor=admin%40example.com&action=UPDATE`,
+        )
+        .expect(200);
+    assert.equal(first.body.data.total, 21);
+    assert.equal(first.body.data.items.length, 20);
+    const second = await admin.agent
+        .get(`/api/admin/product-logs?productId=${p.id}&action=UPDATE&page=2`)
+        .expect(200);
+    assert.equal(second.body.data.items.length, 1);
+    await admin.agent.get("/api/admin/product-logs?from=invalid").expect(400);
+    const future = await admin.agent
+        .get("/api/admin/product-logs?from=2100-01-01T00%3A00%3A00.000Z")
+        .expect(200);
+    assert.equal(future.body.data.total, 0);
+});

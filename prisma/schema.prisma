@@ -38,6 +38,9 @@ model Product {
   createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   orderItems   OrderItem[]
+  images       ProductImage[]
+  coverImageId String? @map("cover_image_id") @db.Uuid
+  movements    StockMovement[]
 
   @@map("tbl_product")
 }
@@ -66,4 +69,47 @@ model OrderItem {
   @@index([orderId])
   @@index([productId])
   @@map("tbl_order_item")
+}
+
+model ProductImage {
+  id String @id @default(uuid()) @db.Uuid
+  productId String? @map("product_id") @db.Uuid
+  uploaderId String @map("uploader_id") @db.Uuid
+  filename String @unique
+  mimeType String @map("mime_type")
+  size Int
+  position Int @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  product Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+  @@index([productId])
+  @@map("tbl_product_image")
+}
+
+model StockMovement {
+  id String @id @default(uuid()) @db.Uuid
+  productId String @map("product_id") @db.Uuid
+  actorId String @map("actor_id") @db.Uuid
+  actorEmail String @map("actor_email")
+  delta Int
+  stockAfter Int @map("stock_after")
+  reason String @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  @@index([productId, createdAt])
+  @@map("tbl_stock_movement")
+}
+
+model ProductLog {
+  id String @id @default(uuid()) @db.Uuid
+  productId String @map("product_id") @db.Uuid
+  productName String @map("product_name")
+  actorId String @map("actor_id") @db.Uuid
+  actorEmail String @map("actor_email")
+  action String
+  changes Json
+  movementId String? @map("movement_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@index([createdAt, id])
+  @@index([productId, createdAt])
+  @@map("tbl_product_log")
 }

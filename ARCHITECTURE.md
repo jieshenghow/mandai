@@ -1,7 +1,7 @@
 # Architecture
 
-> **Status:** Authentication, route-group protection, demo account seed, and auth tests are implemented. Product and
-> purchasing features remain planned. All business pages and APIs require authentication.
+> **Status:** Authentication and admin product/image/inventory management with transactional change logs are implemented.
+> Storefront UI and purchasing remain planned. All business pages and APIs require authentication.
 
 [SPEC.md](./SPEC.md) defines the required behavior and acceptance criteria. This document records the technical design
 and its trade-offs.
@@ -153,11 +153,21 @@ preserving history if the current product price changes.
 product row and foreign key remain so old order items retain a valid reference. Hard deletion and order-history cleanup
 are outside scope.
 
-**Admin stock edits:** An absolute stock value can overwrite a concurrent purchase if based on a stale form. The admin
-form therefore sends `expectedStockVersion` when changing `stock`. The backend conditionally updates `stock` only when
-the version matches, and increments `stockVersion`. A purchase increments the same version. A stale edit receives
-`409 PRODUCT_CHANGED` and must reload current stock. Any metadata and stock changes in one PATCH are applied together in
-one transaction.
+**Admin stock adjustments:** Metadata PATCH rejects stock. The stock-movements endpoint accepts IN/OUT, a positive
+quantity and a reason. Within one transaction, `SELECT ... FOR UPDATE` locks the product; the API checks active state
+and resulting stock bounds, applies the increment/decrement, increments stockVersion, and inserts the stock movement
+and product change log. This serializes concurrent adjustments and remains compatible with future purchase updates.
+Product edit/archive also lock the row, ensuring their log snapshots reflect the values actually changed.
+
+**Images and audit:** ProductImage stores uploader ownership, optional product ownership, file metadata and position;
+Product.coverImageId identifies the selected gallery member, validated transactionally by the API. Attachment locks
+image rows in stable order. Files live in UPLOAD_DIR and are decoded/re-encoded to WebP. Unattached images expire after
+24 hours; database cleanup uses an atomic conditional DELETE that rechecks concurrent attachments. ProductLog stores
+operator/name snapshots and JSON field changes with optional movement linkage, in the same transaction as the change.
+There are no application update/delete endpoints for logs. History intentionally survives product archiving.
+
+See [README.md](./README.md#added-api-contracts) for current image, stock and log contracts; these supersede the older
+absolute-stock PATCH contract in the purchase roadmap below.
 
 ## 5. API architecture and contracts
 
