@@ -5,14 +5,14 @@ whose purchase flow is designed to prevent overselling.
 
 > **Current state:** Authentication, admin inventory management, product browsing, database-backed carts,
 > multi-product checkout and order history are implemented. Checkout prevents overselling and duplicate orders.
-> Every business page and API requires authentication. No payment gateway is used.
+> Catalog pages, active product APIs and attached active-product images are public. Cart, checkout and personal orders require USER; administration requires ADMIN. No payment gateway is used.
 
 ## Features
 
 ### Storefront
 
 - Register, sign in/out, search and browse products, inspect details, and add items to a persistent account cart.
-- Edit cart quantities, skip unavailable items, checkout without payment, and view private order history.
+- Edit cart quantities, resolve unavailable items before whole-cart checkout, checkout without payment, and view private order history.
 - Clear price/stock conflict feedback, atomic multi-product orders, and safe retry after an uncertain response.
 
 ### Admin
@@ -21,6 +21,7 @@ whose purchase flow is designed to prevent overselling.
 - Create, view, edit and archive products in dialogs. Upload up to 8 images and select/reorder the cover.
 - Separate stock-in/out adjustments with reasons, operator identity and history.
 - Read-only product logs show field-level before/after values, including archived products.
+- Paginated all-customer orders and read-only details show customer email, time, quantities, snapshots and SGD total. ADMIN cannot purchase.
 
 ### Backend and correctness
 
@@ -52,15 +53,15 @@ flowchart LR
   A -->|Prisma + conditional SQL| P[(PostgreSQL)]
 ```
 
-The same Next.js app serves the store and admin pages. Express validates input and enforces roles before service logic
-reaches PostgreSQL. [SPEC.md](./SPEC.md) defines required behavior and acceptance
+The same Next.js app serves the store and admin pages. Express validates input and enforces roles before domain route handlers
+reach PostgreSQL. [SPEC.md](./SPEC.md) defines required behavior and acceptance
 criteria; [ARCHITECTURE.md](./ARCHITECTURE.md) explains the database model, transaction design, and trade-offs.
 
 ## Getting started
 
 ### Requirements
 
-- Node.js 20.9 or newer
+- Node.js 20.19.x or later 20.x, 22.12.x or later 22.x, or 24.0+ (installed Prisma requires `^20.19 || ^22.12 || >=24.0`)
 - pnpm (Corepack is fine)
 - Docker with Compose
 
@@ -129,21 +130,24 @@ Run `pnpm db:seed` to create `admin@example.com` (`ADMIN`) and `user@example.com
 `DemoPass123!`**, for local development only. Re-running the seed does not reset existing passwords or roles. Public
 registration always creates `USER`.
 
+Admin order reads: `GET /api/admin/orders?page=1` returns `{items,total,page,pageSize}` (20/page, newest time then ID descending); `GET /api/admin/orders/:id` returns one receipt. Both require ADMIN, expose `customerEmail` alongside item snapshots/time/total, and omit request hashes. USER receives 403; guests receive 401. Missing detail returns 404. There are no order mutation endpoints.
+
+Images: `GET /api/product-images/:id` is public only for an image bound to a non-archived product. Unattached uploads require the uploading ADMIN's current session; other authenticated accounts receive 404 and guests receive 401. Archived-product images return 404. Responses remain `private, no-store` to avoid retaining images after archival.
+
 ## Authentication and route groups
 
 The `(auth)` group contains the shared `/login` and `/register` pages. `(app)` contains `/`; `(admin)` contains
 `/admin`. Parenthesized directories do not change URLs or enforce permissions themselves.
 
 `apps/web/proxy.ts` is the Next.js 16 name for Middleware. It applies the rules in `lib/route-access.ts` before
-rendering all page requests: business pages require login by default; `/admin` and descendants additionally require
+rendering all page requests: catalog `/` and `/products/[id]` are public; other business pages require login by default; `/admin` and descendants additionally require
 `ADMIN`. Signed-in users visiting login/register return to their role’s home page. Unknown paths require authentication
 and then show the themed 404. Static framework assets and `/api` are excluded. Put additional public static assets in an
 explicitly excluded path if added later; never exclude arbitrary file extensions because business URLs may contain dots.
 
 The proxy verifies sessions with Express `/api/auth/me`, forwards the session cookie, and does not cache identity
 responses. Service failures return 503 instead of granting access. USER is redirected from admin pages to `/`;
-unauthenticated users go to `/login`. API requests receive JSON 401/403 errors instead of redirects. Future business API
-routers must be mounted below the existing authentication and admin guards.
+unauthenticated users on private pages go to `/login`. ADMIN cannot enter customer cart/order pages and is redirected to `/admin`. API requests receive JSON 401/403 errors instead of redirects. Private API routers are mounted below authentication and role guards; only catalog reads and authorized image reads precede authentication.
 
 JWT sessions last one hour in an HttpOnly, SameSite=Strict cookie with `Path=/` and Secure in production. The API looks
 up the current database user/role for each protected request. Logout clears the cookie; copied tokens are not revoked
@@ -184,20 +188,20 @@ stock.
 | POST   | `/api/auth/login`         | Public                 |
 | POST   | `/api/auth/logout`        | Any session state      |
 | GET    | `/api/auth/me`            | Authenticated          |
-| GET    | `/api/products`           | Authenticated          |
-| GET    | `/api/products/:id`       | Authenticated          |
+| GET    | `/api/products`           | Public          |
+| GET    | `/api/products/:id`       | Public          |
 | GET    | `/api/admin/products`     | `ADMIN`                |
 | GET    | `/api/admin/products/:id` | `ADMIN`                |
 | POST   | `/api/admin/products`     | `ADMIN`                |
 | PATCH  | `/api/admin/products/:id` | `ADMIN`                |
 | DELETE | `/api/admin/products/:id` | `ADMIN`; soft delete   |
-| GET    | `/api/cart`                 | Authenticated; own cart |
-| POST   | `/api/cart/items`           | Authenticated; add quantity |
-| PATCH  | `/api/cart/items/:id`       | Authenticated; set quantity |
-| DELETE | `/api/cart/items/:id`       | Authenticated; remove item |
-| POST   | `/api/checkout`             | Authenticated; atomic purchase |
-| GET    | `/api/orders`               | Authenticated; own orders, 20/page |
-| GET    | `/api/orders/:id`           | Authenticated; own order |
+| GET    | `/api/cart`                 | `USER`; own cart |
+| POST   | `/api/cart/items`           | `USER`; add quantity |
+| PATCH  | `/api/cart/items/:id`       | `USER`; set quantity |
+| DELETE | `/api/cart/items/:id`       | `USER`; remove item |
+| POST   | `/api/checkout`             | `USER`; atomic purchase |
+| GET    | `/api/orders`               | `USER`; own orders, 20/page |
+| GET    | `/api/orders/:id`           | `USER`; own order |
 
 Cart writes include `version`. Add accepts `{productId, quantity, version}`, PATCH accepts `{quantity, version}`,
 and DELETE accepts `{version}`. One cart supports 100 different products, each with quantity 1–100.
@@ -206,10 +210,10 @@ the server verifies displayed prices and computes the total from locked database
 First success returns `201`; replaying the same user/requestId and payload returns `200` with the original order.
 Reusing a requestId for different contents returns `409 REQUEST_REUSED`.
 
-Unavailable cart entries are greyed out and excluded from the submitted items and total. They remain in the cart.
+Unavailable cart entries remain in the cart and displayed total and block the entire checkout. The customer must explicitly remove them or reduce quantities. The server rejects subsets of the cart.
 If a submitted product becomes unavailable or changes price, the whole request rolls back with `409`; the UI refreshes
 and asks the user to review before another checkout. Success removes only purchased items and opens the order receipt.
-Orders store name and price snapshots and are readable only by their owner.
+Orders store name and price snapshots. USER reads only their own orders; ADMIN reads all orders through separate protected read-only endpoints.
 
 ## Inventory concurrency
 
@@ -222,11 +226,14 @@ Admin stock adjustments use the same product row locks. No in-process mutex, Red
 With stock 1 and two simultaneous quantity-1 purchases, one succeeds, one receives 409, final stock is 0,
 and only one order is created. A unique `(user_id, request_id)` order index plus cart serialization prevents
 repeated submissions from decrementing stock twice. The browser retains unresolved checkout requests in per-user
-sessionStorage so a reload/retry in the same tab can retrieve the original result.
+sessionStorage so a reload/retry in the same tab can retrieve the original result. Authentication/authorization
+failures preserve that request: sign in with the original USER account, return to the cart in the same tab and retry.
+The client checks account identity before submitting; successful responses and explicit checkout validation/conflict
+responses resolve the pending request. Account lookup failures display a retry control and do not establish a guest session.
 
 ## Testing
 
-`pnpm test` runs Node test runner / Supertest against uniquely named disposable PostgreSQL databases. It does not
+`pnpm test` runs frontend tests and Node test runner / Supertest against uniquely named disposable PostgreSQL databases. Review DATABASE_URL first: API suites connect to that control database, CREATE separate `mandai_{auth,products,commerce}_test_<pid>_<timestamp>` databases, apply migrations there and DROP those databases WITH (FORCE) afterward. Run only against an explicitly approved test target. It does not
 modify development records. The DATABASE_URL user needs CREATE DATABASE permission. Coverage includes authentication,
 admin CRUD/uploads/audit, cart isolation and stale edits, order ownership/snapshots, last-unit competition, 12 concurrent
 buyers competing for 3 units, reverse-order multi-item carts, duplicate checkouts, purchase versus admin stock-out,
@@ -287,7 +294,7 @@ entered during creation. Later changes use positive adjustment quantities and a 
 stock overwrite. The API locks the product row and writes inventory, movement and change log in one transaction.
 
 `/admin/product-logs` shows successful product changes only: creation, edits, images/cover/order, stock adjustments and
-archiving. Filter by product name, operator email, action and date; pages contain 20 records. Product details also
+archiving and purchase deductions. Filter by product name, operator email, action and date; pages contain 20 records. Product details also
 include this history. Operator identity comes from the authenticated server session. Failed actions, browsing,
 login/logout and abandoned uploads are not logged. Logs have no mutation endpoint. Snapshots retain operator email
 and product name; image changes retain image IDs rather than permanent copies of removed image bytes.
@@ -300,7 +307,7 @@ instances must share that directory. Uploaded files are excluded from Git; they 
 
 Each product supports 0–8 images, up to 5 MB per input file, in JPG/PNG/WebP format. Animated files and images over
 40 megapixels are rejected. The API decodes and re-encodes images as WebP, stripping metadata. Images are read via
-an authenticated API route; unattached previews are restricted to their uploader. Unattached uploads and removed
+the product-image API: images attached to active products are public; unattached previews require their uploading ADMIN session. Unattached uploads and removed
 images expire after 24 hours and are cleaned on API startup and hourly. Archived product images remain stored.
 After interrupted uploads, orphan file cleanup runs on the same schedule. No cloud account is required.
 
@@ -310,11 +317,11 @@ All admin endpoints require `ADMIN`. JSON responses retain `{data}` / `{error,me
 
 | Method | Endpoint | Input / behavior |
 |---|---|---|
-| GET | `/api/products`, `/api/products/:id` | Authenticated active product reads; omit stock version |
+| GET | `/api/products`, `/api/products/:id` | Public active product reads; omit stock version |
 | GET/POST | `/api/admin/products` | List / create; create accepts name, description, priceCents, stock, imageIds, coverImageId |
 | GET/PATCH/DELETE | `/api/admin/products/:id` | Read / edit metadata and image selection / archive; PATCH rejects stock |
-| POST | `/api/admin/product-images` | Multipart field `image`, one file; returns id and authenticated URL |
-| GET | `/api/product-images/:id` | Authenticated image bytes |
+| POST | `/api/admin/product-images` | Multipart field `image`, one file; returns id and a URL private until attached |
+| GET | `/api/product-images/:id` | Public active-product images; uploading ADMIN only for unattached previews |
 | GET/POST | `/api/admin/products/:id/stock-movements` | History / `{type:"IN" or "OUT", quantity, reason}` |
 | GET | `/api/admin/product-logs` | Optional productId, product (name), actor (email), action, from/to (ISO timestamp), page |
 

@@ -19,15 +19,16 @@ role enforcement, atomic multi-product orders, order history, and clear success/
 
 | Capability                        | Unauthenticated | `USER` | `ADMIN` |
 |-----------------------------------|-----------------|--------|---------|
-| Browse active products and stock  | No              | Yes    | Yes     |
+| Browse active products and stock  | Yes              | Yes    | Yes     |
 | Register a `USER` account         | Yes             | Yes    | Yes     |
 | Login and logout                  | Yes             | Yes    | Yes     |
-| Buy an active product             | No              | Yes    | Yes     |
+| Buy an active product             | No              | Yes    | No     |
+| Use cart / view own orders        | No              | Yes    | No      |
+| View all orders (read-only)        | No              | No     | Yes     |
 | View admin inventory              | No              | No     | Yes     |
 | Create, edit, or archive products | No              | No     | Yes     |
 
-Registration must never accept or assign an `ADMIN` role. Only the development seed or a trusted administrative process
-may create an admin account. Every admin API route must check the role on the server, regardless of what the frontend
+Registration always assigns USER and ignores any submitted role; it never assigns ADMIN. Only the controlled development seed creates ADMIN accounts; there is no public role-management endpoint. Every admin API route must check the role on the server, regardless of what the frontend
 displays.
 
 ## 3. User flows and acceptance criteria
@@ -52,12 +53,12 @@ displays.
 
 ### 3.3 Cart, checkout and orders
 
-1. Each account has a persistent cart, visible across devices. Items have quantities 1–100; the cart allows 100 distinct products.
+1. Each USER account has a persistent cart, visible across devices. Items have quantities 1–100; the cart allows 100 distinct products.
 2. Adding to cart does not reserve or decrement stock. Writes use cart versions to reject stale multi-tab/device changes.
 3. Missing stock, archived products and quantities above stock are greyed out with a reason. They remain editable/removable
-   as appropriate and are excluded from the submitted checkout and total. If nothing is available, checkout is disabled.
-4. Checkout submits a nonempty list of currently displayed available items, quantities, displayed prices, cart version and
-   a UUID requestId. The API checks ownership, cart contents and current locked products, then calculates the total itself.
+   as appropriate and block the entire checkout until explicitly resolved. They remain in the displayed cart total; no item is automatically excluded.
+4. Checkout submits a nonempty list of all cart items, quantities, displayed prices, cart version and
+   a UUID requestId. The API requires USER, checks ownership, exact full cart contents and current locked products, then calculates the total itself.
 5. New success returns 201; replay of the same user/requestId and payload returns 200 with the original order. Reuse with
    different contents returns 409. Pending UI submissions are disabled; uncertain responses retain the exact request for retry.
 6. A submitted item becoming unavailable, insufficient or differently priced returns 409 and rolls back the entire submitted
@@ -65,7 +66,7 @@ displays.
 7. Order, name/price snapshots, stock changes, inventory movements, PURCHASE logs and cart cleanup commit together. Failures
    leave all of them unchanged. Only purchased cart items are removed; stockVersion and cart version increment on success.
 8. With stock 1 and two competing buyers, exactly one succeeds, one receives 409, final stock is 0, and one order exists.
-9. Receipt and order history show purchase-time names/prices. History is owner-only, newest first, 20 orders per page.
+9. Receipt and order history show purchase-time names/prices. Customer history is owner-only, newest first, 20 orders per page. ADMIN has separate read-only all-order endpoints/pages with customer email, time, snapshots, quantities and total; no cancellation, refund or order mutation exists.
 10. Storefront and cart refresh on mount, focus and mutations; no reservation or realtime push is required.
 
 ### 3.4 Admin inventory
@@ -73,7 +74,7 @@ displays.
 1. An admin can view an inventory table with product, price, current stock, derived status, and actions.
 2. An admin can create a product, edit its fields, adjust stock through separate stock-in/out dialogs, and archive it.
 3. Archiving removes a product from public and active admin lists and prevents later purchases. Existing order items
-   remain valid.
+   remain valid. Archived products cannot be restored, edited or stock-adjusted.
 4. Stock adjustments apply a positive quantity and IN/OUT direction to the current locked row, never overwrite an
    absolute stock count. Out-of-bounds adjustments return `409 STOCK_LIMIT`. Successful changes increment `stockVersion`.
 5. Product changes, including stock changes, must be validated and authorized by the API.
@@ -91,6 +92,8 @@ displays.
 | `/register`            | Registration form and validation feedback                     |
 | `/admin`               | Inventory summary and path to product management              |
 | `/admin/products`      | Table-oriented inventory list and create/edit/archive actions |
+| `/admin/orders` | Paginated all-customer order history, read-only |
+| `/admin/orders/[id]` | Read-only order detail including customer email |
 | `/admin/product-logs` | Filtered, paginated read-only product change history           |
 
 Create, view and edit forms are dialogs on `/admin/products`, not separate routes.
@@ -135,20 +138,24 @@ with optional safe validation details. Route parameters and request bodies are v
 | POST   | `/api/auth/login`         | Public        | `{email, password}`                                                                 | `200`, user summary and auth cookie         |
 | POST   | `/api/auth/logout`        | Any           | Empty                                                                               | `200`, cookie cleared                       |
 | GET    | `/api/auth/me`            | Authenticated | —                                                                                   | `200`, user summary                         |
-| GET    | `/api/products`           | Authenticated | —                                                                                   | `200`, active products                      |
-| GET    | `/api/products/:id`       | Authenticated | —                                                                                   | `200`, active product                       |
+| GET    | `/api/products`           | Public | —                                                                                   | `200`, active products                      |
+| GET    | `/api/products/:id`       | Public | —                                                                                   | `200`, active product                       |
 | GET    | `/api/admin/products`     | `ADMIN`       | —                                                                                   | `200`, active inventory with `stockVersion` |
 | GET    | `/api/admin/products/:id` | `ADMIN`       | —                                                                                   | `200`, product with `stockVersion`          |
 | POST   | `/api/admin/products`     | `ADMIN`       | `{name, description, priceCents, stock, imageIds?, coverImageId?}`                                            | `201`, created product                      |
 | PATCH  | `/api/admin/products/:id` | `ADMIN`       | Metadata/image selection only; stock is adjusted through the stock-movements endpoint | `200`, updated product                      |
 | DELETE | `/api/admin/products/:id` | `ADMIN`       | —                                                                                   | `200`, archived product summary             |
-| GET | `/api/cart` | Authenticated | — | Own cart with version and availability |
-| POST | `/api/cart/items` | Authenticated | `{productId,quantity,version}` | `201`, updated cart |
-| PATCH | `/api/cart/items/:id` | Authenticated | `{quantity,version}` | `200`, updated cart |
-| DELETE | `/api/cart/items/:id` | Authenticated | `{version}` | `200`, updated cart |
-| POST | `/api/checkout` | Authenticated | `{requestId,version,items:[{productId,quantity,priceCents}]}` | `201` new / `200` replayed receipt |
-| GET | `/api/orders` | Authenticated | `?page=1` | Own orders, 20/page |
-| GET | `/api/orders/:id` | Authenticated | — | Own order; `404` otherwise |
+| GET | `/api/cart` | `USER` | — | Own cart with version and availability |
+| POST | `/api/cart/items` | `USER` | `{productId,quantity,version}` | `201`, updated cart |
+| PATCH | `/api/cart/items/:id` | `USER` | `{quantity,version}` | `200`, updated cart |
+| DELETE | `/api/cart/items/:id` | `USER` | `{version}` | `200`, updated cart |
+| POST | `/api/checkout` | `USER` | `{requestId,version,items:[{productId,quantity,priceCents}]}` | `201` new / `200` replayed receipt |
+| GET | `/api/orders` | `USER` | `?page=1` | Own orders, 20/page |
+| GET | `/api/orders/:id` | `USER` | — | Own order; `404` otherwise |
+
+Admin order reads: `GET /api/admin/orders?page=1` returns `{items,total,page,pageSize}` (20/page, newest time then ID descending); `GET /api/admin/orders/:id` returns one receipt. Both require ADMIN, expose `customerEmail` alongside item snapshots/time/total, and omit request hashes. USER receives 403; guests receive 401. Missing detail returns 404. There are no order mutation endpoints.
+
+Images: `GET /api/product-images/:id` is public only for an image bound to a non-archived product. Unattached uploads require the uploading ADMIN's current session; other authenticated accounts receive 404 and guests receive 401. Archived-product images return 404. Responses remain `private, no-store` to avoid retaining images after archival.
 
 Order receipt data includes `id`, `totalAmountCents`, and items with `productId`, `productName`, `quantity`, and `unitPriceCents`.
 Public product responses omit `stockVersion`; admin product responses include it.
@@ -181,7 +188,7 @@ The assignment is complete when:
 
 ## 8. Deliberate exclusions
 
-No payment gateway, shipping, refunds, coupons, categories, Redis, Kafka, queues, microservices, event sourcing,
+No payment gateway, shipping, cancellations, refunds, order modifications, coupons, categories, Redis, Kafka, queues, microservices, event sourcing,
 CQRS or Kubernetes. Catalog pagination, rate limiting, refresh token rotation and deployment automation remain future work.
 
 ## Implemented admin extensions

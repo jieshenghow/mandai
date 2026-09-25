@@ -1,7 +1,7 @@
 # Architecture
 
 > **Status:** Authentication and admin product/image/inventory management with transactional change logs are implemented.
-> Storefront, persistent carts, idempotent checkout and private order history are also implemented. All business pages and APIs require authentication.
+> Storefront, persistent carts, idempotent checkout and private order history are also implemented. Catalog pages and active-product reads/images are public; customer operations require USER and administration requires ADMIN.
 
 [SPEC.md](./SPEC.md) defines the required behavior and acceptance criteria. This document records the technical design
 and its trade-offs.
@@ -17,14 +17,14 @@ flowchart LR
   B[Browser] --> W[Next.js storefront + admin]
   W -->|same-origin /api proxy| R[Express routes]
   R --> M[Zod + JWT auth + role middleware]
-  M --> C[Controllers]
-  C --> S[Services]
-  S --> P[Prisma Client + parameterized SQL]
+  M --> H[Domain route modules: auth, products, commerce]
+  H --> P[Prisma Client + parameterized SQL]
   P --> D[(PostgreSQL)]
 ```
 
 The Next.js proxy keeps browser requests and the authentication cookie on one origin. Express remains the API authority;
-hiding an admin link in the UI never grants or removes permission.
+hiding an admin link in the UI never grants or removes permission. Domain route modules contain validation,
+HTTP handlers and transaction logic; there are no separate controller or service layers.
 
 ## 2. Technology choices
 
@@ -84,6 +84,11 @@ describes the mapping mechanism.
 | `User`       | `tbl_user`       | `id`, `email` (unique), `password_hash`, `role`, `created_at`, `updated_at`                                               | One user has many orders.                                                    |
 | `Product`    | `tbl_product`    | `id`, `name`, `description`, `price_cents`, `stock`, `stock_version`, `deleted_at` (nullable), `created_at`, `updated_at` | One product has many order items.                                            |
 | `Order`      | `tbl_order`      | `id`, `user_id`, `request_id`, `request_hash`, `total_amount_cents`, `created_at`                                                                       | Belongs to a user; has multiple purchase-time order items. |
+| `Cart` | `tbl_cart` | `user_id` (PK/FK), `version` | One per user; has cart items. |
+| `CartItem` | `tbl_cart_item` | `user_id`, `product_id` (composite PK), `quantity` | References cart and product. |
+| `ProductImage` | `tbl_product_image` | `id`, nullable `product_id`, `uploader_id`, `filename`, `mime_type`, `size`, `position`, `created_at` | Optional product relation; uploader ID is an application ownership field. |
+| `StockMovement` | `tbl_stock_movement` | `id`, `product_id`, `actor_id`, `actor_email`, `delta`, `stock_after`, `reason`, `created_at` | References product; actor identity is retained as a snapshot. |
+| `ProductLog` | `tbl_product_log` | `id`, `product_id`, `product_name`, `actor_id`, `actor_email`, `action`, JSON `changes`, nullable `movement_id`, `created_at` | Snapshot/link fields have no Prisma relations; written transactionally. |
 | `OrderItem`  | `tbl_order_item` | `id`, `order_id`, `product_id`, `product_name`, `quantity`, `unit_price_cents`                                                            | Belongs to an order and a product.                                           |
 
 `Cart` (`tbl_cart`) has one row per user with an integer version. `CartItem` (`tbl_cart_item`) has a composite
@@ -152,7 +157,7 @@ calculated from locked database products and must be at most 1,000,000,000 cents
 Cart totals may exceed that limit, but the UI disables checkout and asks the user to reduce quantities. OrderItem stores
 name and unit-price snapshots, preserving history after metadata changes or archival.
 
-**Deletion:** `DELETE` is a soft delete that sets `deletedAt`. Public reads and purchases exclude deleted products. The
+**Deletion:** `DELETE` is a soft delete that sets `deletedAt`. Archived products cannot be restored, edited or stock-adjusted through the API. Public reads and purchases exclude deleted products. The
 product row and foreign key remain so old order items retain a valid reference. Hard deletion and order-history cleanup
 are outside scope.
 
@@ -187,19 +192,23 @@ expose hashes or internal database errors.
 | POST   | `/api/auth/login`         | Public            | `200` user summary; auth cookie            | `400`, `401 INVALID_CREDENTIALS`  |
 | POST   | `/api/auth/logout`        | Any               | `200` after clearing cookie                | —                                 |
 | GET    | `/api/auth/me`            | Authenticated     | `200` user summary                         | `401`                             |
-| GET    | `/api/products`           | Authenticated     | `200` active products                      | —                                 |
-| GET    | `/api/products/:id`       | Authenticated     | `200` active product                       | `400`, `404`                      |
+| GET    | `/api/products`           | Public     | `200` active products                      | —                                 |
+| GET    | `/api/products/:id`       | Public     | `200` active product                       | `400`, `404`                      |
 | GET    | `/api/admin/products`     | `ADMIN`           | `200` active inventory with `stockVersion` | `401`, `403`                      |
 | GET    | `/api/admin/products/:id` | `ADMIN`           | `200` active product with `stockVersion`   | `400`, `401`, `403`, `404`        |
 | POST   | `/api/admin/products`     | `ADMIN`           | `201` product                              | `400`, `401`, `403`               |
 | PATCH  | `/api/admin/products/:id` | `ADMIN`           | `200` product                              | `400`, `401`, `403`, `404`, `409` |
 | DELETE | `/api/admin/products/:id` | `ADMIN`           | `200` archived product summary             | `400`, `401`, `403`, `404`        |
-| GET | `/api/cart` | Authenticated | Own cart, version, live availability and total | `401` |
-| POST | `/api/cart/items` | Authenticated | `201` updated cart | `400`, `404`, `409` |
-| PATCH / DELETE | `/api/cart/items/:id` | Authenticated | `200` updated cart | `400`, `404`, `409` |
-| POST | `/api/checkout` | Authenticated | `201` new / `200` replayed order | `400`, `409` |
-| GET | `/api/orders` | Authenticated | Own orders, newest first, 20/page | `400` |
-| GET | `/api/orders/:id` | Authenticated | Own receipt | `400`, `404` |
+| GET | `/api/cart` | `USER` | Own cart, version, live availability and total | `401` |
+| POST | `/api/cart/items` | `USER` | `201` updated cart | `400`, `404`, `409` |
+| PATCH / DELETE | `/api/cart/items/:id` | `USER` | `200` updated cart | `400`, `404`, `409` |
+| POST | `/api/checkout` | `USER` | `201` new / `200` replayed order | `400`, `409` |
+| GET | `/api/orders` | `USER` | Own orders, newest first, 20/page | `400` |
+| GET | `/api/orders/:id` | `USER` | Own receipt | `400`, `404` |
+
+Admin order reads: `GET /api/admin/orders?page=1` returns `{items,total,page,pageSize}` (20/page, newest time then ID descending); `GET /api/admin/orders/:id` returns one receipt. Both require ADMIN, expose `customerEmail` alongside item snapshots/time/total, and omit request hashes. USER receives 403; guests receive 401. Missing detail returns 404. There are no order mutation endpoints.
+
+Images: `GET /api/product-images/:id` is public only for an image bound to a non-archived product. Unattached uploads require the uploading ADMIN's current session; other authenticated accounts receive 404 and guests receive 401. Archived-product images return 404. Responses remain `private, no-store` to avoid retaining images after archival.
 
 Register accepts `{email, password}` and always creates a `USER`; no public role input. Login accepts the same fields.
 Product create accepts metadata, initial stock and image selection. Metadata PATCH rejects stock; inventory changes
@@ -212,11 +221,10 @@ products. All writes lock the cart and compare versions, then increment the vers
 reading its version/items to avoid mixing different cart revisions. No cart operation reserves inventory.
 
 Checkout accepts `{requestId, version, items:[{productId, quantity, priceCents}]}`. UUIDs are normalized to lowercase;
-quantities are 1–100, product IDs are unique, and input objects reject unknown fields. The frontend submits only
-available entries. The API verifies every submitted entry belongs to the current cart with the same quantity.
+quantities are 1–100, product IDs are unique, and input objects reject unknown fields. The frontend submits every cart entry. The API requires the exact complete cart product set and quantities; subsets are rejected with 409, even when the omitted entry is unavailable.
 Price is a displayed-price assertion, never an authority for the order total.
 
-Cart reads mark archived, sold-out and insufficient-quantity entries unavailable, while leaving them in the cart.
+Cart reads mark archived, sold-out and insufficient-quantity entries unavailable, while leaving them in the cart. The displayed total includes all entries; it is not a promise of availability. Any such entry blocks a new checkout. An unresolved request can still be replayed to recover a previously committed order.
 Checkout removes only submitted/purchased items. The receipt contains order ID/time/total and purchase-time item
 names, quantities and prices. Internal request hashes and user IDs are not exposed in receipts.
 
@@ -228,7 +236,7 @@ role, issued time, and expiry. Plan a one-hour expiry; logout clears the cookie.
 copied token, a known limitation of this stateless approach.
 
 The Next.js app proxies `/api/*` to Express, so browser API calls and the cookie are same-origin. Express verifies the
-JWT on every protected request. Role middleware checks `ADMIN` on every admin route. The server ignores any claimed role
+JWT on every protected request. Role middleware checks `ADMIN` on every admin route and `USER` on cart, checkout and personal-order routes. ADMIN cannot use customer operations. The server ignores any claimed role
 in registration, product bodies, or frontend state. UI route guards improve navigation but are not a security boundary.
 Treat database user/role records as authoritative where revocation or immediate role changes matter; the implemented
 middleware reloads the database user and role on each protected request. Copied tokens remain usable until expiry unless
@@ -241,7 +249,7 @@ the user is deleted.
 1. Create the cart if missing with INSERT ON CONFLICT DO NOTHING, then SELECT its row FOR UPDATE.
 2. Look up the order by authenticated user and requestId. If it exists, compare the canonical request hash and return
    the existing receipt. Check this before cart version, because a successful checkout changes that version.
-3. Check the expected cart version and submitted quantities against the user's cart.
+3. Check the expected cart version and exact full product set/quantities against the user's cart. Reject omitted or extra lines.
 4. Sort product IDs and lock each product FOR UPDATE in that order. Validate active state, stock and displayed price.
 5. Decrement with parameterized conditional SQL and increment stockVersion:
 
@@ -256,8 +264,7 @@ WHERE id = $1 AND deleted_at IS NULL AND stock >= $2;
 6. Check the total bound; insert order and item snapshots, negative stock movements and PURCHASE logs with order IDs.
 7. Remove purchased cart items, increment cart version, and commit. Any error rolls back every step.
 
-Known unavailable entries are skipped before submission. If a submitted item changes stock, price or archive state,
-the whole submitted purchase fails with 409. The UI refreshes and requires another explicit checkout; it never silently
+Any known unavailable entry blocks checkout until the customer explicitly removes it or reduces its quantity. If an item changes stock, price or archive state, the whole purchase fails with 409. The UI refreshes and requires another explicit checkout; it never silently
 changes the purchased subset or unit prices. Transaction timeout is 15 seconds, max connection wait is 10 seconds;
 unexpected database errors return 500 and are not disguised as stock conflicts.
 
@@ -277,8 +284,10 @@ No JavaScript mutex or Redis lock is required, including across multiple API pro
 Idempotency uses a unique `(user_id, request_id)` order key. A SHA-256 hash includes the cart version and canonical
 sorted product/quantity/displayed-price list. Identical repeats return the original order; changed payloads return 409.
 The frontend stores an unresolved request in per-user sessionStorage before sending. On uncertain network/server
-responses it retains the exact request and offers Retry checkout, including after reload in that tab. Deterministic
-4xx failures clear the pending request and refresh state. No purchase mutation retries automatically. If browser storage
+responses it retains the exact request and offers Retry checkout, including after reload in that tab. Authentication
+and authorization failures also retain it and prompt sign-in with the original customer account. Before submission,
+the client checks that the current session belongs to that USER; account lookup failures retain the request too.
+Only success or explicit checkout validation/conflict responses (400/409) clear the pending request. No purchase mutation retries automatically. If browser storage
 is unavailable, this recovery survives within the mounted page only; order history remains available.
 
 Catalog/cart data refetch on mount and window focus. Checkout invalidates current-client queries, including inventory
@@ -291,7 +300,7 @@ submitted before checkout so the summary matches the purchase.
 |------|-------------------------------------------|---------------------------------------------------------------|
 | 400  | `VALIDATION_ERROR`                        | Invalid body or route parameter.                              |
 | 401  | `UNAUTHENTICATED` / `INVALID_CREDENTIALS` | No valid session or failed login.                             |
-| 403  | `FORBIDDEN`                               | Authenticated user lacks `ADMIN` role.                        |
+| 403  | `FORBIDDEN`                               | Authenticated user lacks the required USER or ADMIN role.                        |
 | 404  | `PRODUCT_NOT_FOUND`                       | Product absent or archived.                                   |
 | 409  | `INSUFFICIENT_STOCK` / `CART_CHANGED` / `PRICE_CHANGED`  | Stock, cart or price changed; refresh and reconfirm. |
 | 500  | `INTERNAL_ERROR`                          | Unexpected failure; details logged server-side.               |
@@ -319,7 +328,7 @@ cross-site request risk but does not replace a full CSRF review, especially with
 
 ## 11. Technical trade-offs
 
-- **Express vs NestJS:** Express gives visible route/middleware/controller/service flow without decorators or modules
+- **Express vs NestJS:** Express gives visible route/middleware/domain-handler flow without decorators or modules
   that add little to this small API.
 - **PostgreSQL vs NoSQL:** Orders, item price snapshots, and inventory updates benefit from relational constraints and
   transactions.
@@ -340,15 +349,38 @@ Node's test runner and Supertest exercise the actual Express handlers against di
 applying every checked-in migration. No transaction mocks. Each suite drops its own database on completion.
 `pnpm test` also runs web route protection tests. `pnpm typecheck`, `pnpm lint` and the web build validate static output.
 
-Commerce coverage: cart persistence/isolation and stale edits; invalid inputs; skipped unavailable items; name/price
+Commerce coverage: cart persistence/isolation and stale edits; invalid inputs; whole-cart rejection for unavailable items and forged subsets; name/price
 snapshots and owner-only history; two buyers for one unit; 12 buyers for three units; identical and different-request-ID
 repeat purchases; multi-item rollback on stock, price or archive conflicts; inverse product order without deadlocks;
 purchase versus admin stock-out; total overflow; forced order/item/movement/log insertion failure with full rollback.
 
-Manual browser acceptance covers search/detail/add, quantity editing, greyed unavailable items, checkout receipt/history,
+Planned manual browser acceptance covers search/detail/add, quantity editing, greyed unavailable items, checkout receipt/history,
 keyboard navigation and narrow/mobile layouts. Browser checks require an available browser connection.
 
 ## 13. Future improvements
 
 Payment and reservations, shipping/refunds, catalog pagination, rate limiting, token revocation, monitoring and deployment
 automation remain outside this assessment. Carts, order history, basic catalog search and checkout idempotency are implemented.
+
+## 14. Recorded baseline verification (2026-09-25)
+
+The following results were recorded in baseline commit `27ea8f5`. They are historical evidence, not checks
+rerun for the targeted review fixes; in particular, the API suites and web build were not rerun for those fixes.
+
+| Command | Result |
+| --- | --- |
+| `pnpm lint` | Passed. |
+| `pnpm --filter @mandai/api typecheck` | Passed after correcting two implicit-any annotations in new tests. |
+| `pnpm --filter @mandai/web exec tsc --noEmit --incremental false` | Passed; incremental output disabled to avoid rewriting tracked build metadata. |
+| `pnpm --filter @mandai/web test` | 3 tests passed: route matrix, proxy, whole-cart eligibility/payload. |
+| `pnpm --filter @mandai/api test` | 22 tests passed against real PostgreSQL, including concurrency and injected persistence failures. Expected injected-error logs are not test failures. |
+| `pnpm --filter @mandai/web build` | Passed, including both new admin order routes. |
+| `git diff --check` | Passed. |
+
+The user explicitly authorized localhost:5432 with the existing DATABASE_URL as a control connection. Only separate
+`mandai_{auth,products,commerce}_test_<pid>_<timestamp>` databases received test migrations/data and were dropped by
+suite teardown. A subsequent read-only pg_database query found no remaining databases matching these test names.
+No development schema migration, seed, credential edit, commit, push or deployment was performed.
+
+Manual browser interaction, visual layout, keyboard and responsive acceptance were not run. The successful build and
+unit/integration checks do not imply those checks passed. Catalog pagination remains intentionally out of scope.
