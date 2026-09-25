@@ -11,8 +11,8 @@ import {
     type Cart,
     type CartItem,
     type Checkout,
-    type Order,
 } from "@/lib/commerce";
+import { readPendingCheckout, savePendingCheckout, submitCheckout } from "@/lib/checkout-recovery";
 import { Feedback } from "./product-ui";
 import { freshQueries, ProductPicture } from "./storefront";
 
@@ -122,19 +122,6 @@ function CartRow({
         </article>
     );
 }
-function readPending(key: string): Checkout | null {
-    try {
-        const value = JSON.parse(sessionStorage.getItem(key) ?? "null");
-        return value &&
-            typeof value.requestId === "string" &&
-            Number.isInteger(value.version) &&
-            Array.isArray(value.items)
-            ? value
-            : null;
-    } catch {
-        return null;
-    }
-}
 function LoadedCart({ cart }: { cart: Cart }) {
     const client = useQueryClient();
     const router = useRouter();
@@ -158,7 +145,7 @@ function LoadedCart({ cart }: { cart: Cart }) {
         }));
     }
     const [pendingRequest, setPendingRequest] = useState<Checkout | null>(() =>
-        readPending(storageKey),
+        readPendingCheckout(storageKey),
     );
     const edit = useMutation({
         mutationFn: ({ id, quantity }: { id: string; quantity?: number }) =>
@@ -177,30 +164,16 @@ function LoadedCart({ cart }: { cart: Cart }) {
     });
     function remember(value: Checkout | null) {
         setPendingRequest(value);
-        try {
-            if (value)
-                sessionStorage.setItem(storageKey, JSON.stringify(value));
-            else sessionStorage.removeItem(storageKey);
-        } catch {
-            /* In-memory protection still works when browser storage is unavailable. */
-        }
+        savePendingCheckout(storageKey, value);
     }
     const checkout = useMutation({
         mutationFn: (input: Checkout) =>
-            api<Order>("/api/checkout", "POST", input),
+            submitCheckout(cart.userId, input, remember),
         onSuccess: async (order) => {
-            remember(null);
             await client.invalidateQueries();
             router.push(`/orders/${order.id}`);
         },
-        onError: async (error) => {
-            // A lost response may hide a committed order. Keep the exact request for a safe retry.
-            if (
-                error instanceof ApiError &&
-                error.status >= 400 &&
-                error.status < 500
-            )
-                remember(null);
+        onError: async () => {
             await client.invalidateQueries();
         },
     });
@@ -215,12 +188,14 @@ function LoadedCart({ cart }: { cart: Cart }) {
             version: cart.version,
             items,
         };
-        remember(input);
         checkout.mutate(input);
     }
     return (
         <>
             <Feedback error={edit.error ?? checkout.error} />
+            {pendingRequest && checkout.error instanceof ApiError && [401, 403].includes(checkout.error.status) && (
+                <Link href="/login" className="btn mt-4">Sign in to recover checkout</Link>
+            )}
             {pendingRequest && !checkout.isPending && (
                 <p
                     role="status"

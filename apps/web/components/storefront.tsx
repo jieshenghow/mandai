@@ -47,8 +47,8 @@ export function ProductPicture({
         </div>
     );
 }
-function AddToCart({ product }: { product: StoreProduct }) {
-    const user = useAccount();
+export function AddToCart({ product }: { product: StoreProduct }) {
+    const account = useAccount();
     const [quantity, setQuantity] = useState(1);
     const [added, setAdded] = useState(false);
     const client = useQueryClient();
@@ -70,9 +70,10 @@ function AddToCart({ product }: { product: StoreProduct }) {
             await client.invalidateQueries({ queryKey: ["store-products"] });
         },
     });
-    if (user === undefined) return <p className="mt-5 text-text-subtle">Loading account…</p>;
-    if (user === null) return <Link href="/login" className="btn mt-5">Sign in to shop</Link>;
-    if (user.role === "ADMIN") return <p className="mt-5 text-text-subtle">Administrator account · browsing only</p>;
+    if (account.status === "loading") return <p className="mt-5 text-text-subtle">Loading account…</p>;
+    if (account.status === "guest") return <Link href="/login" className="btn mt-5">Sign in to shop</Link>;
+    if (account.status === "error") return <p className="mt-5 text-text-subtle">Account unavailable. Use Retry account above to shop.</p>;
+    if (account.user.role !== "USER") return <p className="mt-5 text-text-subtle">Administrator account · browsing only</p>;
     return (
         <form
             onSubmit={(event) => {

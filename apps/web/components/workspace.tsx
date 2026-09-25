@@ -1,55 +1,44 @@
 "use client";
 import Link from "next/link";
-import {useEffect, useState, createContext, useContext, type ReactNode} from "react";
-import {isPublicCatalog, type User} from "@/lib/route-access";
+import {useEffect, createContext, useContext, type ReactNode} from "react";
+import {redirectFor} from "@/lib/route-access";
 import {usePathname} from "next/navigation";
-const AccountContext = createContext<User | null | undefined>(undefined);
+import {loadAccount, type AccountState} from "@/lib/account";
+const loadingAccount: AccountState = {status: "loading"};
+const AccountContext = createContext<AccountState>(loadingAccount);
 export const useAccount = () => useContext(AccountContext);
-import {useMutation, useQueryClient} from "@tanstack/react-query";
+import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {postApi} from "@/lib/api";
 
 export function Workspace({admin = false, children, section = "Overview"}: { admin?: boolean; children?: ReactNode; section?: string }) {
-    const [user, setUser] = useState<User | null | undefined>(undefined);
-    const publicCatalog = isPublicCatalog(usePathname());
-    const [error, setError] = useState("");
+    const accountQuery = useQuery({
+        queryKey: ["account"],
+        queryFn: ({signal}) => loadAccount(signal),
+        staleTime: 0,
+        refetchOnMount: "always",
+    });
+    const account: AccountState = accountQuery.isFetching || !accountQuery.data
+        ? loadingAccount : accountQuery.data;
+    const pathname = usePathname();
+    const user = account.status === "authenticated" ? account.user : null;
     const queryClient = useQueryClient();
     const logoutMutation = useMutation({
         mutationFn: () => postApi<{ success: boolean }>("/api/auth/logout"),
-        onMutate: () => setError(""),
         onSuccess: () => {
             queryClient.clear();
             window.location.replace("/login");
         },
     });
     const pending = logoutMutation.isPending || logoutMutation.isSuccess;
-    const displayedError = logoutMutation.error?.message ?? error;
+    const displayedError = logoutMutation.error?.message;
     useEffect(() => {
-        const controller = new AbortController();
-        fetch("/api/auth/me", {cache: "no-store", signal: controller.signal})
-            .then(async (response) => {
-                if (response.status === 401) {
-                    if (!publicCatalog) window.location.replace("/login");
-                    setUser(null);
-                    return;
-                }
-                if (!response.ok)
-                    throw new Error(
-                        "Unable to load your account. Please refresh to retry.",
-                    );
-                const {data} = await response.json();
-                if (admin && data.role !== "ADMIN") {
-                    window.location.replace("/");
-                    return;
-                }
-                setUser(data);
-            })
-            .catch((cause) => {
-                if (!controller.signal.aborted) setError(cause.message);
-            });
-        return () => controller.abort();
-    }, [admin, publicCatalog]);
+        if (account.status === "authenticated" || account.status === "guest") {
+            const redirect = redirectFor(pathname, account.status === "authenticated" ? account.user.role : null);
+            if (redirect) window.location.replace(redirect);
+        }
+    }, [pathname, account]);
     return (
-        <AccountContext.Provider value={user}><div className="flex min-h-svh max-[641px]:flex-col">
+        <AccountContext.Provider value={account}><div className="flex min-h-svh max-[641px]:flex-col">
             {admin && (
                 <aside
                     className="flex w-58 shrink-0 flex-col gap-3 border-r border-border bg-surface-1 px-4 py-6 max-[641px]:w-full max-[641px]:gap-2 max-[641px]:border-r-0 max-[641px]:border-b max-[641px]:p-4">
@@ -100,10 +89,26 @@ export function Workspace({admin = false, children, section = "Overview"}: { adm
                             disabled={pending}
                         >
                             {pending ? "Signing out…" : "Sign out"}
-                        </button> : user === null ? <Link href="/login">Sign in</Link> : <span>Loading account…</span>}
+                        </button> : account.status === "guest" ? <Link href="/login">Sign in</Link> : <span>{account.status === "error" ? "Account unavailable" : "Loading account…"}</span>}
                     </div>
                 </header>
                 <main className="mx-auto max-w-260 px-8 py-12 max-[641px]:px-4 max-[641px]:py-8">
+                    {displayedError && (
+                        <p
+                            role="alert"
+                            className="rounded-lg border border-danger-border bg-danger-surface p-3 text-[13px] text-danger"
+                        >
+                            {displayedError}
+                        </p>
+                    )}
+                    {account.status === "error" && (
+                        <div role="alert" className="mb-6 rounded-lg border border-danger-border bg-danger-surface p-3 text-danger">
+                            <p>{account.message}</p>
+                            <button className="btn mt-3" onClick={() => {
+                                void accountQuery.refetch();
+                            }}>Retry account</button>
+                        </div>
+                    )}
                     {children ?? <>
                     <p className="mb-3 text-[11px] font-semibold tracking-[1.5px] text-text-subtle">
                         {admin ? "ADMINISTRATION" : "YOUR WORKSPACE"}
@@ -116,14 +121,6 @@ export function Workspace({admin = false, children, section = "Overview"}: { adm
                             ? "Your inventory workspace starts here."
                             : "You’re signed in and ready to get started."}
                     </p>
-                    {displayedError && (
-                        <p
-                            role="alert"
-                            className="rounded-lg border border-danger-border bg-danger-surface p-3 text-[13px] text-danger"
-                        >
-                            {displayedError}
-                        </p>
-                    )}
                     <section className="rounded-xl border border-border bg-surface-1 p-6 max-[641px]:p-4">
                         <div className="mb-6 flex items-center justify-between gap-4">
                             <h2 className="text-[20px] font-semibold">Your account</h2>
@@ -141,7 +138,7 @@ export function Workspace({admin = false, children, section = "Overview"}: { adm
                             </>
                         ) : (
                             <p role="status" className="mt-1 wrap-anywhere">
-                                {error ? "Account unavailable" : "Loading account…"}
+                                {account.status === "error" ? "Account unavailable" : account.status === "guest" ? "Not signed in" : "Loading account…"}
                             </p>
                         )}
                     </section>
