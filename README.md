@@ -72,8 +72,6 @@ criteria; [ARCHITECTURE.md](./ARCHITECTURE.md) explains the database model, tran
 ### Run locally
 
 ```bash
-git clone https://github.com/jieshenghow/mandai.git mandai-assessment
-cd mandai-assessment
 cp .env.example .env
 docker compose up -d --wait
 pnpm install
