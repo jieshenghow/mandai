@@ -84,7 +84,8 @@ pnpm db:seed:products
 pnpm dev
 ```
 
-Open `http://localhost:3000` and sign in with a demo account below. `pnpm db:seed` creates accounts;
+Open `http://localhost:3000/login` and sign in as **`admin@example.com`** with password **`DemoPass123!`**
+to access the admin dashboard. See [Demo accounts](#demo-accounts) for both roles. `pnpm db:seed` creates accounts;
 `pnpm db:seed:products` imports the 30 sample products and 150 images from `test-products/`.
 You can also create and edit products as an administrator at `/admin/products`.
 `http://localhost:4000/api/health` checks Express
@@ -133,9 +134,16 @@ JWT secret before deployment. `.env` is ignored by Git; the checked-in values ar
 
 ## Demo accounts
 
-Run `pnpm db:seed` to create `admin@example.com` (`ADMIN`) and `user@example.com` (`USER`). Both new accounts use
-**`DemoPass123!`**, for local development only. Re-running the seed does not reset existing passwords or roles. Public
-registration always creates `USER`.
+Run `pnpm db:seed` after applying migrations to create these local development accounts:
+
+| Role | Email | Password | Access |
+| --- | --- | --- | --- |
+| Admin | `admin@example.com` | `DemoPass123!` | `/admin` dashboard, product management, stock adjustments, and all orders |
+| Customer | `user@example.com` | `DemoPass123!` | Storefront, cart, checkout, and personal order history |
+
+Sign in at `http://localhost:3000/login`. Admin accounts manage inventory; use the customer account to test purchases.
+Public registration creates only `USER` accounts. Re-running the seed does not reset existing passwords or roles.
+These credentials are for local development only.
 
 ### Demo products
 
