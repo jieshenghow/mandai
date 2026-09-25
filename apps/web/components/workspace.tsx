@@ -81,9 +81,10 @@ export function Workspace({admin = false, children, section = "Overview"}: { adm
                 <header
                     className="flex min-h-18 items-center justify-between gap-4 border-b border-border px-8 py-4 text-[13px] text-text-subtle max-[641px]:flex-wrap max-[641px]:px-4">
           <span>
-            {admin ? `Administration / ${section}` : "Mandai / Workspace"}
+            {admin ? `Administration / ${section}` : `Mandai / ${section}`}
           </span>
                     <div className="flex flex-wrap items-center gap-4">
+                        {!admin && <nav aria-label="Store navigation" className="flex gap-4"><Link href="/" aria-current={section === "Collection" ? "page" : undefined}>Shop</Link><Link href="/cart" aria-current={section === "Cart" ? "page" : undefined}>Cart</Link><Link href="/orders" aria-current={section === "Orders" ? "page" : undefined}>Orders</Link></nav>}
                         {user?.role === "ADMIN" && !admin && (
                             <Link href="/admin">Administration</Link>
                         )}

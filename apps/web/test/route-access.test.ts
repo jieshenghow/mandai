@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {redirectFor, routeGroup} from "@/lib/route-access";
 
 test("every page group defaults to authenticated access", () => {
-    for (const path of ["/", "/products/123", "/missing", "/adminish"]) {
+    for (const path of ["/", "/products/123", "/cart", "/orders", "/orders/123", "/missing", "/adminish"]) {
         assert.equal(routeGroup(path), "app");
         assert.equal(redirectFor(path, null), "/login");
         for (const role of ["USER", "ADMIN"] as const)

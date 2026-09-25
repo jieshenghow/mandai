@@ -33,13 +33,19 @@ export type Movement = {
     createdAt: string;
 };
 export class ApiError extends Error {
+    status: number;
+    code: string;
     details: { path: string[]; message: string }[];
     constructor(
         message: string,
         details: { path: string[]; message: string }[] = [],
+        status = 0,
+        code = "",
     ) {
         super(message);
         this.details = details;
+        this.status = status;
+        this.code = code;
     }
 }
 export async function api<T>(
@@ -69,6 +75,8 @@ export async function api<T>(
             result?.message ??
                 "Unable to complete the request. Please try again.",
             result?.details,
+            response.status,
+            result?.error,
         );
     if (!result || !("data" in result))
         throw new Error("Unexpected response. Please try again.");

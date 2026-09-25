@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, money, time, type LogPage } from "@/lib/products";
 import { Feedback } from "./product-ui";
 const actions: Record<string, string> = {
+    PURCHASE: "Purchased",
     CREATE: "Created",
     UPDATE: "Edited",
     ARCHIVE: "Deleted (archived)",

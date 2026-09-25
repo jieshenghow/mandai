@@ -1,7 +1,7 @@
 # Architecture
 
 > **Status:** Authentication and admin product/image/inventory management with transactional change logs are implemented.
-> Storefront UI and purchasing remain planned. All business pages and APIs require authentication.
+> Storefront, persistent carts, idempotent checkout and private order history are also implemented. All business pages and APIs require authentication.
 
 [SPEC.md](./SPEC.md) defines the required behavior and acceptance criteria. This document records the technical design
 and its trade-offs.
@@ -49,15 +49,14 @@ mandai-assessment/
 │   │   └── lib/                 # API client and presentation helpers
 │   └── api/
 │       └── src/
-│           ├── routes/         # route registration
-│           ├── middleware/     # validation, auth, role, error handler
-│           ├── controllers/    # HTTP input/output mapping
-│           ├── services/       # product and purchase rules
-│           ├── schemas/        # Zod contracts
-│           ├── lib/            # Prisma client and shared utilities
-│           ├── app.ts          # Express composition root; health route only
-│           └── server.ts       # API listener
-├── prisma/                     # schema and SQL migration; seed planned
+│           ├── app.ts          # authenticated API composition and errors
+│           ├── auth.ts         # sessions and roles
+│           ├── products.ts     # product, image, movement and audit routes
+│           ├── commerce.ts     # carts, checkout transaction and order reads
+│           ├── db.ts           # Prisma PostgreSQL adapter
+│           ├── seed.ts         # local demo users
+│           └── server.ts       # API listener and image cleanup
+├── prisma/                     # schema and checked-in SQL migrations
 ├── prisma7.config.ts           # Prisma 7 database connection and migration paths
 ├── DESIGN.md                   # visual source of truth
 ├── SPEC.md                     # behavior and acceptance criteria
@@ -68,9 +67,8 @@ mandai-assessment/
 └── .env.example
 ```
 
-The web and API scaffold entry points and root `pnpm dev` script now exist. The component and route/controller/service
-directories shown above are target structure. The initial schema and migration exist; seed and domain features will be
-added during implementation.
+Commerce lives in one domain module, keeping the transaction and its HTTP boundary close enough to explain in an interview.
+Frontend storefront, cart and order components reuse the workspace shell and visual primitives.
 
 ## 4. Database schema
 
@@ -85,8 +83,14 @@ describes the mapping mechanism.
 |--------------|------------------|---------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
 | `User`       | `tbl_user`       | `id`, `email` (unique), `password_hash`, `role`, `created_at`, `updated_at`                                               | One user has many orders.                                                    |
 | `Product`    | `tbl_product`    | `id`, `name`, `description`, `price_cents`, `stock`, `stock_version`, `deleted_at` (nullable), `created_at`, `updated_at` | One product has many order items.                                            |
-| `Order`      | `tbl_order`      | `id`, `user_id`, `total_amount_cents`, `created_at`                                                                       | Belongs to a user; has one order item for this single-product purchase flow. |
-| `OrderItem`  | `tbl_order_item` | `id`, `order_id`, `product_id`, `quantity`, `unit_price_cents`                                                            | Belongs to an order and a product.                                           |
+| `Order`      | `tbl_order`      | `id`, `user_id`, `request_id`, `request_hash`, `total_amount_cents`, `created_at`                                                                       | Belongs to a user; has multiple purchase-time order items. |
+| `OrderItem`  | `tbl_order_item` | `id`, `order_id`, `product_id`, `product_name`, `quantity`, `unit_price_cents`                                                            | Belongs to an order and a product.                                           |
+
+`Cart` (`tbl_cart`) has one row per user with an integer version. `CartItem` (`tbl_cart_item`) has a composite
+`(user_id, product_id)` primary key, product foreign key and quantity constraint of 1–100. Cart rows are created lazily.
+Orders have a unique `(user_id, request_id)` index and a SHA-256 request hash. Legacy orders may have null request fields;
+new checkout requests require them. The migration backfills legacy item names from their referenced products before
+making `product_name` non-null. Historical names before this migration cannot be reconstructed.
 
 The current Prisma schema maps `Product.priceCents` to `tbl_product.price_cents`. An abbreviated example:
 
@@ -143,11 +147,10 @@ the SQL migration file. Do not use `prisma db push` as a substitute for that
 migration. [Prisma's check-constraint guidance](https://docs.prisma.io/docs/orm/v6/more/troubleshooting/check-constraints)
 explains the migration approach.
 
-**Money:** Prices are SGD, stored as integer cents. This avoids JavaScript floating-point calculations and makes API
-values unambiguous. A single order buys one product. With price limited to 10,000,000 cents and quantity to 100,
-`priceCents * quantity` is at most 1,000,000,000 cents, within a signed 32-bit integer. The service calculates this from
-the `price_cents` returned by the inventory update. `OrderItem.unitPriceCents` stores the purchase-time price,
-preserving history if the current product price changes.
+**Money:** SGD integer cents throughout. Each line is at most 10,000,000 cents × 100 units. Multi-item totals are
+calculated from locked database products and must be at most 1,000,000,000 cents; an excess returns 400 and rolls back.
+Cart totals may exceed that limit, but the UI disables checkout and asks the user to reduce quantities. OrderItem stores
+name and unit-price snapshots, preserving history after metadata changes or archival.
 
 **Deletion:** `DELETE` is a soft delete that sets `deletedAt`. Public reads and purchases exclude deleted products. The
 product row and foreign key remain so old order items retain a valid reference. Hard deletion and order-history cleanup
@@ -156,7 +159,7 @@ are outside scope.
 **Admin stock adjustments:** Metadata PATCH rejects stock. The stock-movements endpoint accepts IN/OUT, a positive
 quantity and a reason. Within one transaction, `SELECT ... FOR UPDATE` locks the product; the API checks active state
 and resulting stock bounds, applies the increment/decrement, increments stockVersion, and inserts the stock movement
-and product change log. This serializes concurrent adjustments and remains compatible with future purchase updates.
+and product change log. This serializes concurrent adjustments and remains compatible with purchase updates.
 Product edit/archive also lock the row, ensuring their log snapshots reflect the values actually changed.
 
 **Images and audit:** ProductImage stores uploader ownership, optional product ownership, file metadata and position;
@@ -166,15 +169,13 @@ image rows in stable order. Files live in UPLOAD_DIR and are decoded/re-encoded 
 operator/name snapshots and JSON field changes with optional movement linkage, in the same transaction as the change.
 There are no application update/delete endpoints for logs. History intentionally survives product archiving.
 
-See [README.md](./README.md#added-api-contracts) for current image, stock and log contracts; these supersede the older
-absolute-stock PATCH contract in the purchase roadmap below.
+See [README.md](./README.md#added-api-contracts) for current image, stock and log contracts; stock changes are incremental operations, never absolute-stock metadata PATCH requests.
 
 ## 5. API architecture and contracts
 
-The pipeline is **route → middleware → controller → service → Prisma/PostgreSQL**. Routes map URLs. Middleware validates
-Zod schemas and verifies identity/role. Controllers translate HTTP to service calls and response shapes. Services own
-business rules and transactions. Prisma handles normal persistence; tagged, parameterized raw SQL handles the stock
-update. No repository layer or in-memory inventory lock is planned.
+The pipeline is **route → authentication/role middleware → domain handler → Prisma/PostgreSQL**. Domain handlers
+validate Zod schemas, shape responses and own business transactions. Prisma handles normal persistence; tagged, parameterized raw SQL handles the stock
+update. There is no repository layer or in-memory inventory lock.
 
 All responses use camelCase JSON. Success objects are `{ "data": ... }`; lists use `{ "data": [...] }`. Errors use
 `{ "error": "MACHINE_CODE", "message": "Human-readable message." }`, optionally with safe validation `details`. Never
@@ -193,18 +194,31 @@ expose hashes or internal database errors.
 | POST   | `/api/admin/products`     | `ADMIN`           | `201` product                              | `400`, `401`, `403`               |
 | PATCH  | `/api/admin/products/:id` | `ADMIN`           | `200` product                              | `400`, `401`, `403`, `404`, `409` |
 | DELETE | `/api/admin/products/:id` | `ADMIN`           | `200` archived product summary             | `400`, `401`, `403`, `404`        |
-| POST   | `/api/products/:id/buy`   | `USER` or `ADMIN` | `201` order receipt                        | `400`, `401`, `404`, `409`        |
+| GET | `/api/cart` | Authenticated | Own cart, version, live availability and total | `401` |
+| POST | `/api/cart/items` | Authenticated | `201` updated cart | `400`, `404`, `409` |
+| PATCH / DELETE | `/api/cart/items/:id` | Authenticated | `200` updated cart | `400`, `404`, `409` |
+| POST | `/api/checkout` | Authenticated | `201` new / `200` replayed order | `400`, `409` |
+| GET | `/api/orders` | Authenticated | Own orders, newest first, 20/page | `400` |
+| GET | `/api/orders/:id` | Authenticated | Own receipt | `400`, `404` |
 
 Register accepts `{email, password}` and always creates a `USER`; no public role input. Login accepts the same fields.
-Product create accepts `{name, description, priceCents, stock}`. Product PATCH accepts one or more of those fields; if
-`stock` is included, `expectedStockVersion` is required. Purchase accepts `{quantity}` with an integer from 1 to 100.
-Validate UUID route parameters and all bodies with Zod. Price is an integer number of cents, never a floating-point
-currency amount. Returned product data includes `stockVersion` only for admin responses. An order receipt includes `id`,
-`totalAmountCents`, and one item with `productId`, `quantity`, and `unitPriceCents`.
+Product create accepts metadata, initial stock and image selection. Metadata PATCH rejects stock; inventory changes
+use the separate stock-movements endpoint. Public product reads omit stockVersion. Catalog lists are deliberately
+unpaginated for the small assessment dataset; order history is paginated.
 
-`GET /api/products` and `GET /api/admin/products` are deliberately unpaginated for the small seeded catalog. The admin
-reads expose `stockVersion` for safe stock editing. An `/orders` page and order-list endpoint are deferred unless time
-remains after the required flows.
+Cart add accepts `{productId, quantity, version}`, quantity update accepts `{quantity, version}`, and removal accepts
+`{version}`. Add increments an existing item; PATCH sets its absolute quantity. The account cart is limited to 100
+products. All writes lock the cart and compare versions, then increment the version. GET also locks the cart while
+reading its version/items to avoid mixing different cart revisions. No cart operation reserves inventory.
+
+Checkout accepts `{requestId, version, items:[{productId, quantity, priceCents}]}`. UUIDs are normalized to lowercase;
+quantities are 1–100, product IDs are unique, and input objects reject unknown fields. The frontend submits only
+available entries. The API verifies every submitted entry belongs to the current cart with the same quantity.
+Price is a displayed-price assertion, never an authority for the order total.
+
+Cart reads mark archived, sold-out and insufficient-quantity entries unavailable, while leaving them in the cart.
+Checkout removes only submitted/purchased items. The receipt contains order ID/time/total and purchase-time item
+names, quantities and prices. Internal request hashes and user IDs are not exposed in receipts.
 
 ## 6. Authentication and authorization
 
@@ -222,67 +236,54 @@ the user is deleted.
 
 ## 7. Purchase transaction
 
-A read-then-write stock check is unsafe: two callers can both read `stock = 1`, each decide that one unit is available,
-and then both try to buy it. The service instead starts one PostgreSQL transaction and executes a parameterized
-conditional update (illustrative SQL using the planned table names):
+`commerce.ts` uses one interactive Prisma transaction at READ COMMITTED:
+
+1. Create the cart if missing with INSERT ON CONFLICT DO NOTHING, then SELECT its row FOR UPDATE.
+2. Look up the order by authenticated user and requestId. If it exists, compare the canonical request hash and return
+   the existing receipt. Check this before cart version, because a successful checkout changes that version.
+3. Check the expected cart version and submitted quantities against the user's cart.
+4. Sort product IDs and lock each product FOR UPDATE in that order. Validate active state, stock and displayed price.
+5. Decrement with parameterized conditional SQL and increment stockVersion:
 
 ```sql
 UPDATE tbl_product
 SET stock = stock - $2,
     stock_version = stock_version + 1,
-    updated_at = NOW()
-WHERE id = $1
-  AND deleted_at IS NULL
-  AND stock >= $2
-RETURNING id, price_cents, stock;
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL AND stock >= $2;
 ```
 
-`$1` is the validated product UUID and `$2` is the validated positive quantity; actual Prisma code will use a tagged
-`$queryRaw` inside `$transaction`, not string-concatenated SQL. If one row returns, create `Order` and `OrderItem` in
-that same transaction using the returned `price_cents`, then commit. If order insertion fails, the transaction rolls
-back the stock decrement. If no row returns, a follow-up existence check distinguishes missing/deleted product
-(`404 PRODUCT_NOT_FOUND`) from insufficient stock (`409 INSUFFICIENT_STOCK`). That read only selects an error response;
-it is never used to authorize a decrement.
+6. Check the total bound; insert order and item snapshots, negative stock movements and PURCHASE logs with order IDs.
+7. Remove purchased cart items, increment cart version, and commit. Any error rolls back every step.
 
-```mermaid
-sequenceDiagram
-  participant A as Buyer A
-  participant B as Buyer B
-  participant DB as PostgreSQL product row
-  Note over DB: Initial stock = 1
-  A->>DB: BEGIN; UPDATE WHERE stock >= 1
-  DB-->>A: row returned; stock = 0 (row locked)
-  B->>DB: BEGIN; UPDATE WHERE stock >= 1
-  Note over B,DB: B waits for A's row update
-  A->>DB: INSERT order + item; COMMIT
-  DB-->>B: Recheck WHERE on stock = 0; zero rows
-  B->>DB: ROLLBACK
-  A-->>A: 201 purchase succeeded
-  B-->>B: 409 INSUFFICIENT_STOCK
-  Note over DB: Final stock = 0; one order
-```
-
-If A rolls back instead, B can update the original stock and succeed. The transaction boundary makes order creation and
-stock decrement one atomic outcome.
+Known unavailable entries are skipped before submission. If a submitted item changes stock, price or archive state,
+the whole submitted purchase fails with 409. The UI refreshes and requires another explicit checkout; it never silently
+changes the purchased subset or unit prices. Transaction timeout is 15 seconds, max connection wait is 10 seconds;
+unexpected database errors return 500 and are not disguised as stock conflicts.
 
 ## 8. Concurrency strategy
 
-Use PostgreSQL's default **READ COMMITTED** isolation for the single-row conditional update. An `UPDATE` obtains the row
-lock. A competing update waits. After the first transaction commits, PostgreSQL rechecks the second update's `WHERE`
-condition against the new row version. With initial stock 1 and two quantity-1 purchases, exactly one update returns a
-row; the other returns zero rows and receives 409. The nonnegative check constraint is a second defense if a future
-write path is flawed. This
-follows [PostgreSQL's documented READ COMMITTED update behavior](https://www.postgresql.org/docs/current/transaction-iso.html#XACT-READ-COMMITTED).
+All writes to one user's cart use the same cart lock. Checkout holds it until commit, preventing lost edits or two
+orders consuming the same cart version. Different users have different cart locks; their shared product locks coordinate
+inventory. Product IDs are locked in stable order so overlapping multi-product purchases do not invert lock order.
+Admin changes lock one product row and participate in the same inventory serialization.
 
-The same row serialization protects the purchase-time price snapshot against concurrent admin price edits: the returned
-price comes from the row version that was actually updated. Admin stock edits use the version condition described above
-so stale forms cannot silently replace a purchase decrement. A JavaScript mutex only protects one process and is
-unnecessary here. A Redis lock adds infrastructure and failure modes while leaving PostgreSQL as the inventory
-authority. A JavaScript-only stock check does not make the read and write atomic.
+With stock 1, buyer A locks the product and buyer B waits. A decrements, creates the order and commits. B then reads
+stock 0 and gets 409; no order or stock movement is created for B. If A rolls back, B sees the original inventory.
+The explicit row lock protects the read/check/update sequence; the conditional UPDATE and CHECK(stock >= 0) provide
+additional safeguards. This follows [PostgreSQL's documented READ COMMITTED locking behavior](https://www.postgresql.org/docs/current/transaction-iso.html#XACT-READ-COMMITTED).
+No JavaScript mutex or Redis lock is required, including across multiple API processes using the same database.
 
-This design covers one product per purchase. Multi-product carts would need a deliberate locking/order strategy and are
-out of scope. No idempotency key exists yet: a client retry after an uncertain response can create a second legitimate
-purchase if stock remains.
+Idempotency uses a unique `(user_id, request_id)` order key. A SHA-256 hash includes the cart version and canonical
+sorted product/quantity/displayed-price list. Identical repeats return the original order; changed payloads return 409.
+The frontend stores an unresolved request in per-user sessionStorage before sending. On uncertain network/server
+responses it retains the exact request and offers Retry checkout, including after reload in that tab. Deterministic
+4xx failures clear the pending request and refresh state. No purchase mutation retries automatically. If browser storage
+is unavailable, this recovery survives within the mounted page only; order history remains available.
+
+Catalog/cart data refetch on mount and window focus. Checkout invalidates current-client queries, including inventory
+and logs. Other sessions see changes on refocus/reload; there is no push feed. Unsaved cart quantity edits must be
+submitted before checkout so the summary matches the purchase.
 
 ## 9. Error handling
 
@@ -292,7 +293,7 @@ purchase if stock remains.
 | 401  | `UNAUTHENTICATED` / `INVALID_CREDENTIALS` | No valid session or failed login.                             |
 | 403  | `FORBIDDEN`                               | Authenticated user lacks `ADMIN` role.                        |
 | 404  | `PRODUCT_NOT_FOUND`                       | Product absent or archived.                                   |
-| 409  | `INSUFFICIENT_STOCK` / `PRODUCT_CHANGED`  | Purchase cannot obtain quantity or admin stock form is stale. |
+| 409  | `INSUFFICIENT_STOCK` / `CART_CHANGED` / `PRICE_CHANGED`  | Stock, cart or price changed; refresh and reconfirm. |
 | 500  | `INTERNAL_ERROR`                          | Unexpected failure; details logged server-side.               |
 
 Example insufficient-inventory response:
@@ -306,8 +307,8 @@ preserving rollback.
 
 ## 10. Security
 
-The implementation will hash passwords with bcrypt; validate external input with Zod; use parameterized Prisma queries;
-keep secrets in environment variables; set an HttpOnly auth cookie; and enforce `ADMIN` checks in Express. Keep `.env`
+The implementation hashes passwords with bcrypt; validates external input with Zod; uses parameterized Prisma queries;
+keeps secrets in environment variables; sets an HttpOnly auth cookie; and enforces `ADMIN` checks in Express. Keep `.env`
 and real credentials out of Git. The API should limit CORS to the configured web origin if direct browser access is
 enabled; same-origin proxying is the primary browser path. Render user content as text, not raw HTML.
 
@@ -335,25 +336,19 @@ cross-site request risk but does not replace a full CSRF review, especially with
 
 ## 12. Testing strategy and roadmap
 
-Integration tests will use Vitest (or Jest), Supertest, and a real isolated PostgreSQL database. Authentication cases:
-invalid/valid login, unauthenticated protected route, `USER` on an admin route → 403, and `ADMIN` success. Product
-cases: create/read/update/delete and validation errors. Purchase cases: success, insufficient stock,
-zero/negative/noninteger quantity, missing product, and unauthenticated request. Critical concurrency case: with stock
-1, start two Supertest purchases concurrently; assert exactly one `201`, exactly one `409`, final stock 0, and exactly
-one new order/item. Do not mock the transaction in that test. Also test that a stale admin stock edit receives
-`409 PRODUCT_CHANGED` after a purchase.
+Node's test runner and Supertest exercise the actual Express handlers against disposable real PostgreSQL databases,
+applying every checked-in migration. No transaction mocks. Each suite drops its own database on completion.
+`pnpm test` also runs web route protection tests. `pnpm typecheck`, `pnpm lint` and the web build validate static output.
 
-| Phase            | Work                                                                                                             |
-|------------------|------------------------------------------------------------------------------------------------------------------|
-| 1. Foundation    | Complete workspace packages, TypeScript setup, PostgreSQL, Prisma, migration with checks, environment scripts.   |
-| 2. Data and auth | Schema, seed with local demo users, bcrypt/JWT cookie flow, role middleware.                                     |
-| 3. Products      | Public reads, admin CRUD, soft delete, versioned stock edits.                                                    |
-| 4. Purchase      | Conditional SQL update, order transaction, real-database concurrency tests.                                      |
-| 5. Frontend      | Storefront, product detail, auth forms, admin table/form, purchase feedback using `DESIGN.md`.                   |
-| 6. Quality       | Error/empty/loading states, responsive and keyboard checks, test pass, documentation cleanup, GitHub submission. |
+Commerce coverage: cart persistence/isolation and stale edits; invalid inputs; skipped unavailable items; name/price
+snapshots and owner-only history; two buyers for one unit; 12 buyers for three units; identical and different-request-ID
+repeat purchases; multi-item rollback on stock, price or archive conflicts; inverse product order without deadlocks;
+purchase versus admin stock-out; total overflow; forced order/item/movement/log insertion failure with full rollback.
+
+Manual browser acceptance covers search/detail/add, quantity editing, greyed unavailable items, checkout receipt/history,
+keyboard navigation and narrow/mobile layouts. Browser checks require an available browser connection.
 
 ## 13. Future improvements
 
-Consider idempotency keys first if real clients retry purchases. Other optional work includes order history, pagination
-and search, inventory reservations for payment flows, payment integration, audit logs, refresh token rotation, rate
-limiting, observability, and deployment automation. None is required for the initial assignment.
+Payment and reservations, shipping/refunds, catalog pagination, rate limiting, token revocation, monitoring and deployment
+automation remain outside this assessment. Carts, order history, basic catalog search and checkout idempotency are implemented.

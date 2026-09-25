@@ -441,7 +441,7 @@ adminProducts.get("/product-logs", async (req, res) => {
             product: z.string().max(120).optional(),
             actor: z.string().max(255).optional(),
             action: z
-                .enum(["CREATE", "UPDATE", "ARCHIVE", "STOCK_IN", "STOCK_OUT"])
+                .enum(["CREATE", "UPDATE", "ARCHIVE", "STOCK_IN", "STOCK_OUT", "PURCHASE"])
                 .optional(),
             from: z.iso.datetime().optional(),
             to: z.iso.datetime().optional(),

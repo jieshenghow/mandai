@@ -1,7 +1,6 @@
 # Product Specification
 
-> **Status:** Authentication and admin product management are implemented, including multi-image uploads, stock movements
-> and product change logs. Storefront UI and purchasing remain planned.
+> **Status:** Authentication, admin management, storefront, persistent carts, safe checkout and order history are implemented.
 
 This document defines **what Mandai Assessment must do** and how to tell whether it is
 complete. [ARCHITECTURE.md](./ARCHITECTURE.md) explains **how** the system will meet these
@@ -13,9 +12,8 @@ Build a small product storefront and an admin inventory dashboard in one Next.js
 and PostgreSQL. The essential result is a purchase flow that cannot oversell stock, even when requests arrive
 concurrently.
 
-The required scope is registration/login/logout, product browsing, admin product CRUD, single-product quantity purchase,
-role enforcement, durable orders, and clear success/error feedback. An order-history page is optional and outside the
-completion criteria.
+The required scope is registration/login/logout, product browsing, admin product CRUD, database-backed carts,
+role enforcement, atomic multi-product orders, order history, and clear success/error feedback.
 
 ## 2. Users and permissions
 
@@ -45,25 +43,30 @@ displays.
 ### 3.2 Storefront and product detail
 
 1. The storefront lists active products with name, SGD price, and current availability.
-2. A product detail page shows name, description, price, stock, quantity control, and purchase action.
+2. A product detail page shows name, description, price, stock, quantity control, and add-to-cart action.
 3. A missing or archived product receives a useful not-found state and API `404`.
 4. Stock status is derived from stock: `0` = **Sold Out**, `1–5` = **Low Stock**, `6+` = **In Stock**. The label is not
    persisted.
 5. The browser may disable purchase controls for sold-out stock, but the API decides whether a purchase succeeds.
    Displayed stock may be stale.
 
-### 3.3 Purchase
+### 3.3 Cart, checkout and orders
 
-1. An authenticated buyer sends a positive integer quantity from 1 to 100 for one product.
-2. If enough stock exists, the API returns `201` with an order receipt. The database stores exactly one order and one
-   order item for that purchase, decrements stock once, and records the unit price at purchase time.
-3. If stock is insufficient, the API returns `409 INSUFFICIENT_STOCK`, creates no order, and leaves stock unchanged.
-4. If the product does not exist or is archived, the API returns `404 PRODUCT_NOT_FOUND` and creates no order.
-5. If any order write fails after the stock update, the whole operation rolls back, including the decrement.
-6. Stock is never negative. For stock `1` and two simultaneous quantity-`1` requests, exactly one succeeds and one
-   receives `409`; final stock is `0` and exactly one order exists.
-7. The UI shows a clear success receipt or a clear failure message and refreshes displayed availability after the
-   response.
+1. Each account has a persistent cart, visible across devices. Items have quantities 1–100; the cart allows 100 distinct products.
+2. Adding to cart does not reserve or decrement stock. Writes use cart versions to reject stale multi-tab/device changes.
+3. Missing stock, archived products and quantities above stock are greyed out with a reason. They remain editable/removable
+   as appropriate and are excluded from the submitted checkout and total. If nothing is available, checkout is disabled.
+4. Checkout submits a nonempty list of currently displayed available items, quantities, displayed prices, cart version and
+   a UUID requestId. The API checks ownership, cart contents and current locked products, then calculates the total itself.
+5. New success returns 201; replay of the same user/requestId and payload returns 200 with the original order. Reuse with
+   different contents returns 409. Pending UI submissions are disabled; uncertain responses retain the exact request for retry.
+6. A submitted item becoming unavailable, insufficient or differently priced returns 409 and rolls back the entire submitted
+   order. The UI refreshes and the user reviews before resubmitting. The server does not silently reduce quantities or skip more items.
+7. Order, name/price snapshots, stock changes, inventory movements, PURCHASE logs and cart cleanup commit together. Failures
+   leave all of them unchanged. Only purchased cart items are removed; stockVersion and cart version increment on success.
+8. With stock 1 and two competing buyers, exactly one succeeds, one receives 409, final stock is 0, and one order exists.
+9. Receipt and order history show purchase-time names/prices. History is owner-only, newest first, 20 orders per page.
+10. Storefront and cart refresh on mount, focus and mutations; no reservation or realtime push is required.
 
 ### 3.4 Admin inventory
 
@@ -75,12 +78,15 @@ displays.
    absolute stock count. Out-of-bounds adjustments return `409 STOCK_LIMIT`. Successful changes increment `stockVersion`.
 5. Product changes, including stock changes, must be validated and authorized by the API.
 
-## 4. Planned pages
+## 4. Pages
 
 | Route                  | Required content                                              |
 |------------------------|---------------------------------------------------------------|
 | `/`                    | Active product grid, availability, navigation to details      |
-| `/products/[id]`       | Product detail, quantity selector, purchase result            |
+| `/products/[id]`       | Product detail, quantity selector, add to cart                 |
+| `/cart`                 | Persistent cart, availability and checkout                      |
+| `/orders`               | Private paginated order history                                |
+| `/orders/[id]`          | Private order receipt                                           |
 | `/login`               | Login form and authentication feedback                        |
 | `/register`            | Registration form and validation feedback                     |
 | `/admin`               | Inventory summary and path to product management              |
@@ -96,7 +102,7 @@ table must preserve essential columns on small screens, including by horizontal 
 ## 5. Data and validation contract
 
 All IDs are UUIDs. API JSON and Prisma fields use camelCase. Physical PostgreSQL tables are `tbl_user`, `tbl_product`,
-`tbl_order`, and `tbl_order_item`; their columns use snake_case. Prices are **SGD integer cents**; the API never accepts
+`tbl_order`, `tbl_order_item`, `tbl_cart`, and `tbl_cart_item`, plus image and audit tables; their columns use snake_case. Prices are **SGD integer cents**; the API never accepts
 a floating-point currency amount. The initial catalog is small and list endpoints do not require pagination.
 
 | Data                       | Required validation or invariant                                            |
@@ -108,14 +114,14 @@ a floating-point currency amount. The initial catalog is small and list endpoint
 | `Product.description`      | String, at most 2,000 characters; empty string allowed.                     |
 | `Product.priceCents`       | Integer from 1 to 10,000,000.                                               |
 | `Product.stock`            | Integer from 0 to 1,000,000. PostgreSQL must enforce at least `stock >= 0`. |
-| `Product.stockVersion`     | Nonnegative integer used to reject stale admin stock edits.                 |
+| `Product.stockVersion`     | Nonnegative counter incremented on stock adjustments and purchases.                 |
 | Purchase `quantity`        | Integer from 1 to 100.                                                      |
-| `Order.totalAmountCents`   | Purchase-time `unitPriceCents × quantity`; positive integer.                |
-| `OrderItem.unitPriceCents` | Snapshot of the product price returned by the successful inventory update.  |
+| `Order.totalAmountCents`   | Sum of purchase-time line totals; 1–1,000,000,000 cents.                |
+| `OrderItem.unitPriceCents` | Snapshot of the locked product price at checkout.  |
 
-The [Prisma schema](./prisma/schema.prisma) persists `User`, `Product`, `Order`, and `OrderItem` with the relationships
+The [Prisma schema](./prisma/schema.prisma) persists users, products, carts, orders, images and audit records with the relationships
 described in [ARCHITECTURE.md](./ARCHITECTURE.md#4-database-schema). Product archive state is `deletedAt`, not a
-separate inventory status. The initial migration includes a nonnegative-stock check; the future API must reject invalid
+separate inventory status. The initial migration includes a nonnegative-stock check; the API rejects invalid
 input before querying where possible.
 
 ## 6. API contract
@@ -136,14 +142,19 @@ with optional safe validation details. Route parameters and request bodies are v
 | POST   | `/api/admin/products`     | `ADMIN`       | `{name, description, priceCents, stock, imageIds?, coverImageId?}`                                            | `201`, created product                      |
 | PATCH  | `/api/admin/products/:id` | `ADMIN`       | Metadata/image selection only; stock is adjusted through the stock-movements endpoint | `200`, updated product                      |
 | DELETE | `/api/admin/products/:id` | `ADMIN`       | —                                                                                   | `200`, archived product summary             |
-| POST   | `/api/products/:id/buy`   | Authenticated | `{quantity}`                                                                        | `201`, order receipt                        |
+| GET | `/api/cart` | Authenticated | — | Own cart with version and availability |
+| POST | `/api/cart/items` | Authenticated | `{productId,quantity,version}` | `201`, updated cart |
+| PATCH | `/api/cart/items/:id` | Authenticated | `{quantity,version}` | `200`, updated cart |
+| DELETE | `/api/cart/items/:id` | Authenticated | `{version}` | `200`, updated cart |
+| POST | `/api/checkout` | Authenticated | `{requestId,version,items:[{productId,quantity,priceCents}]}` | `201` new / `200` replayed receipt |
+| GET | `/api/orders` | Authenticated | `?page=1` | Own orders, 20/page |
+| GET | `/api/orders/:id` | Authenticated | — | Own order; `404` otherwise |
 
-Order receipt data includes `id`, `totalAmountCents`, and one item with `productId`, `quantity`, and `unitPriceCents`.
+Order receipt data includes `id`, `totalAmountCents`, and items with `productId`, `productName`, `quantity`, and `unitPriceCents`.
 Public product responses omit `stockVersion`; admin product responses include it.
 
 Expected failure statuses: `400` for validation, `401` for missing/invalid authentication or failed login, `403` for
-insufficient role, `404` for absent/archived products, `409` for insufficient stock, duplicate email, or stale admin
-stock edit. Unexpected failures return `500` without internal details. Insufficient stock specifically returns:
+insufficient role, `404` for absent/archived products, `409` for insufficient stock, duplicate email, price changes, unavailable products, or a stale cart version. Unexpected failures return `500` without internal details. Insufficient stock specifically returns:
 
 ```json
 { "error": "INSUFFICIENT_STOCK", "message": "Not enough inventory available." }
@@ -160,8 +171,8 @@ The assignment is complete when:
 - The Express API performs the listed operations with Zod validation, bcrypt password hashes, JWT authentication, and
   server-side roles.
 - A checked-in PostgreSQL migration creates the schema and the `stock >= 0` constraint.
-- Product CRUD and one-product purchases work, including archive behavior and purchase-time price history.
-- Authentication, authorization, validation, CRUD, purchase success/failure, and stale admin stock edit have meaningful
+- Product CRUD and multi-product purchases work, including archive behavior and purchase-time price history.
+- Authentication, authorization, validation, CRUD, purchase success/failure, repeat requests, and stale cart edits have meaningful
   tests.
 - A **real PostgreSQL** Supertest concurrency test proves the last-item scenario: one `201`, one `409`, stock `0`, one
   order and item. The transaction is not mocked.
@@ -170,9 +181,8 @@ The assignment is complete when:
 
 ## 8. Deliberate exclusions
 
-No cart, payment gateway, shipping, coupons, categories, Redis, Kafka, queues, microservices, event sourcing, CQRS, or
-Kubernetes. Search, pagination, order history, idempotency keys, rate limiting, refresh token rotation, and deployment
-automation are optional future work. Do not expand scope until the required flows and concurrency test are complete.
+No payment gateway, shipping, refunds, coupons, categories, Redis, Kafka, queues, microservices, event sourcing,
+CQRS or Kubernetes. Catalog pagination, rate limiting, refresh token rotation and deployment automation remain future work.
 
 ## Implemented admin extensions
 
@@ -180,6 +190,5 @@ The API contracts, image storage rules and operator log behavior in [README.md](
 part of this specification. Each product has 0–8 local images with an explicit cover. Stock-in/out requires quantity
 and reason and produces an immutable application-level movement record. Product changes append actor/time/target and
 before/after values transactionally; no-op edits, failed requests and account/view actions are excluded. Archived
-products remain visible through the global product log. Existing references to stale absolute stock edits in the
-purchase roadmap are superseded by incremental stock adjustments; the future purchase path must still increment
-stockVersion. Purchase implementation and its concurrency test remain outside this admin delivery.
+products remain visible through the global product log. Stock adjustments and purchases both lock product rows and increment stockVersion. Purchases add PURCHASE logs
+with the order ID and stock before/after values. Failed purchases do not leave audit or movement records.

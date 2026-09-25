@@ -3,15 +3,17 @@
 A small full-stack product management take-home: one customer storefront, one admin inventory dashboard, and one API
 whose purchase flow is designed to prevent overselling.
 
-> **Current state:** Login, registration, logout, JWT cookie sessions, page route protection, role checks, and demo
-> accounts are implemented. Admin product management, local image uploads, stock movements and product change logs are also implemented. Every business page requires authentication. Storefront UI and purchasing remain planned.
+> **Current state:** Authentication, admin inventory management, product browsing, database-backed carts,
+> multi-product checkout and order history are implemented. Checkout prevents overselling and duplicate orders.
+> Every business page and API requires authentication. No payment gateway is used.
 
 ## Features
 
 ### Storefront
 
-- Register, sign in/out, browse products, inspect stock, and buy a quantity of one product.
-- Clear success and insufficient-inventory feedback. Order history is optional and deferred.
+- Register, sign in/out, search and browse products, inspect details, and add items to a persistent account cart.
+- Edit cart quantities, skip unavailable items, checkout without payment, and view private order history.
+- Clear price/stock conflict feedback, atomic multi-product orders, and safe retry after an uncertain response.
 
 ### Admin
 
@@ -27,7 +29,8 @@ whose purchase flow is designed to prevent overselling.
   together.
 - A database `CHECK (stock >= 0)` and a real PostgreSQL concurrency test provide defense and evidence.
 
-The storefront and purchase transaction above remain implementation targets. Admin product and stock management are implemented and integration-tested.
+Storefront, purchasing and admin inventory management are implemented. Real PostgreSQL integration tests cover
+concurrent buyers, repeat requests, admin stock competition and transactional rollback.
 
 ## Tech stack
 
@@ -154,19 +157,21 @@ authentication and route-policy tests, and drops that test database. The connect
 to create databases. Tests do not modify development records. Run `pnpm lint`, `pnpm typecheck`, and
 `pnpm --filter @mandai/web build` for static checks.
 
-## Planned routes
+## Web routes
 
 | Web route              | Purpose                             |
 |------------------------|-------------------------------------|
 | `/`                    | Product storefront                  |
-| `/products/[id]`       | Product details and purchase        |
+| `/products/[id]`       | Product details and add to cart     |
+| `/cart`                 | Persistent cart and checkout         |
+| `/orders`               | Paginated order history              |
+| `/orders/[id]`          | Order receipt and purchase snapshots |
 | `/login`, `/register`  | Authentication                      |
 | `/admin`               | Inventory summary                   |
 | `/admin/products`      | Table-oriented inventory management |
-| `/admin/products/new`  | Create product                      |
-| `/admin/products/[id]` | Edit product and stock              |
+| `/admin/product-logs`   | Filtered product and purchase logs   |
 
-Reusable UI pieces will include `AppHeader`, `AdminSidebar`, `PageContainer`, `ProductCard`, `ProductTable`,
+Shared UI pieces include `AppHeader`, `AdminSidebar`, `PageContainer`, `ProductCard`, `ProductTable`,
 `ProductForm`, `StockBadge`, `QuantitySelector`, and small `Button`, `Input`, `Badge`, `Table`, and `Dialog` primitives.
 The admin table will right-align price/stock and derive **In Stock**, **Low Stock**, and **Sold Out** from the current
 stock.
@@ -186,52 +191,59 @@ stock.
 | POST   | `/api/admin/products`     | `ADMIN`                |
 | PATCH  | `/api/admin/products/:id` | `ADMIN`                |
 | DELETE | `/api/admin/products/:id` | `ADMIN`; soft delete   |
-| POST   | `/api/products/:id/buy`   | Authenticated          |
+| GET    | `/api/cart`                 | Authenticated; own cart |
+| POST   | `/api/cart/items`           | Authenticated; add quantity |
+| PATCH  | `/api/cart/items/:id`       | Authenticated; set quantity |
+| DELETE | `/api/cart/items/:id`       | Authenticated; remove item |
+| POST   | `/api/checkout`             | Authenticated; atomic purchase |
+| GET    | `/api/orders`               | Authenticated; own orders, 20/page |
+| GET    | `/api/orders/:id`           | Authenticated; own order |
 
-Purchase body: `{ "quantity": 2 }`. Product prices are SGD integer `priceCents`. Successful purchases return `201` with
-an order receipt; insufficient inventory returns `409` with
-`{ "error": "INSUFFICIENT_STOCK", "message": "Not enough inventory available." }`. All errors share that `error`/
-`message` shape. See [ARCHITECTURE.md](./ARCHITECTURE.md#5-api-architecture-and-contracts) for input contracts and other
-statuses.
+Cart writes include `version`. Add accepts `{productId, quantity, version}`, PATCH accepts `{quantity, version}`,
+and DELETE accepts `{version}`. One cart supports 100 different products, each with quantity 1–100.
+Checkout accepts `{requestId, version, items:[{productId, quantity, priceCents}]}`. Prices are SGD integer cents;
+the server verifies displayed prices and computes the total from locked database rows (maximum 1,000,000,000 cents).
+First success returns `201`; replaying the same user/requestId and payload returns `200` with the original order.
+Reusing a requestId for different contents returns `409 REQUEST_REUSED`.
+
+Unavailable cart entries are greyed out and excluded from the submitted items and total. They remain in the cart.
+If a submitted product becomes unavailable or changes price, the whole request rolls back with `409`; the UI refreshes
+and asks the user to review before another checkout. Success removes only purchased items and opens the order receipt.
+Orders store name and price snapshots and are readable only by their owner.
 
 ## Inventory concurrency
 
-The purchase service will execute
-`UPDATE tbl_product SET stock = stock - $2 WHERE id = $1 AND stock >= $2 RETURNING ...` inside the same transaction that
-inserts the order. PostgreSQL serializes competing updates on the product row and rechecks the condition after a
-competing commit. With stock 1 and two simultaneous quantity-1 requests, one purchase succeeds, one gets 409, final
-stock is 0, and only one order is created. [The transaction design](./ARCHITECTURE.md#7-purchase-transaction) explains
-the precise behavior and the admin stock-edit strategy.
+Checkout locks the user's cart, checks idempotency and cart version, then locks product rows in sorted UUID order.
+It validates current stock, active state and displayed price, and performs a conditional decrement:
+`UPDATE tbl_product SET stock = stock - $2, stock_version = stock_version + 1 WHERE id = $1 AND stock >= $2 ...`.
+Order, items, stock movements, PURCHASE logs and cart cleanup commit together. Any failure rolls everything back.
+Admin stock adjustments use the same product row locks. No in-process mutex, Redis or queue is needed.
 
-PostgreSQL tables are `tbl_user`, `tbl_product`, `tbl_order`, and `tbl_order_item`, with snake_case columns. Prisma
-fields are camelCase and map to those physical names; the future API will use camelCase JSON. See
-the [schema naming contract](./ARCHITECTURE.md#4-database-schema).
+With stock 1 and two simultaneous quantity-1 purchases, one succeeds, one receives 409, final stock is 0,
+and only one order is created. A unique `(user_id, request_id)` order index plus cart serialization prevents
+repeated submissions from decrementing stock twice. The browser retains unresolved checkout requests in per-user
+sessionStorage so a reload/retry in the same tab can retrieve the original result.
 
-## Testing plan
+## Testing
 
-The API test suite will cover valid and invalid login, missing authentication, `USER` receiving 403 on admin routes,
-`ADMIN` success, product CRUD and validation, purchase success/failure, and bad quantities. The critical Supertest
-integration case must use a real PostgreSQL database:
+`pnpm test` runs Node test runner / Supertest against uniquely named disposable PostgreSQL databases. It does not
+modify development records. The DATABASE_URL user needs CREATE DATABASE permission. Coverage includes authentication,
+admin CRUD/uploads/audit, cart isolation and stale edits, order ownership/snapshots, last-unit competition, 12 concurrent
+buyers competing for 3 units, reverse-order multi-item carts, duplicate checkouts, purchase versus admin stock-out,
+and forced order/item/movement/log failures with complete rollback.
 
-```text
-Given stock = 1
-When two purchase requests for quantity 1 start concurrently
-Then exactly one returns 201 and one returns 409
-And final stock = 0
-And exactly one corresponding order and order item exist
-```
-
-Authentication and route-policy tests now run with `pnpm test`; product and purchase tests are still planned. Current
-checks are `pnpm lint`, `pnpm typecheck`, and `pnpm --filter @mandai/web build`.
+Run `pnpm typecheck`, `pnpm lint`, and `pnpm --filter @mandai/web build` for static/build verification.
+Manual browser acceptance: sign in, search/open a product, add and edit items, verify unavailable items are greyed out,
+checkout, inspect history, and check keyboard access and mobile widths. A browser connection is needed for visual checks.
 
 ## Project structure
 
 ```text
 mandai-assessment/
 ├── apps/
-│   ├── web/              # generated Next.js app; store + admin to be built
+│   ├── web/              # Next.js storefront, cart, orders and admin
 │   └── api/              # generated Express app adapted to TypeScript
-├── prisma/               # schema and SQL migration; seed planned
+├── prisma/               # schema and checked-in SQL migrations
 ├── prisma7.config.ts
 ├── DESIGN.md
 ├── SPEC.md
@@ -247,14 +259,12 @@ mandai-assessment/
 [DESIGN.md](./DESIGN.md) is the visual source of truth. It
 adapts [the Linear-inspired reference](https://github.com/VoltAgent/awesome-design-md/blob/main/design-md/linear.app/DESIGN.md)
 into a restrained dark dashboard and storefront with subtle borders, deliberate spacing, clear status, and a limited
-lavender accent. The UI will use a public/system font and will not copy Linear's product layout.
+lavender accent. The UI uses a system font stack and the project’s own product layout.
 
 ## Trade-offs and roadmap
 
 This is a modular monolith with one relational database. Prisma handles standard data access; parameterized SQL
-expresses the inventory-critical update. Soft deletion preserves order history. Production concerns such as idempotency
-keys, token revocation, rate limiting, and payment are deferred. The six implementation phases and their test gates are
-in [ARCHITECTURE.md](./ARCHITECTURE.md#12-testing-strategy-and-roadmap). The project repository
+expresses the inventory-critical update. Soft deletion preserves order history. Token revocation, rate limiting, inventory reservations and payment are deferred. Checkout idempotency is implemented. Testing details are in [ARCHITECTURE.md](./ARCHITECTURE.md#12-testing-strategy-and-roadmap). The project repository
 is [jieshenghow/mandai](https://github.com/jieshenghow/mandai).
 
 ## Frontend POST requests
@@ -311,7 +321,7 @@ All admin endpoints require `ADMIN`. JSON responses retain `{data}` / `{error,me
 An image must belong to the product or be an unattached upload owned by the current administrator. Omit imageIds
 on PATCH to preserve the gallery. When supplied, imageIds is the complete ordered selection; removing the current
 cover chooses the first remaining image. Empty galleries have a null cover. Stock adjustments return `409 STOCK_LIMIT`
-when inventory would leave 0–1,000,000. Successful adjustments increment stockVersion for future purchase compatibility.
+when inventory would leave 0–1,000,000. Successful adjustments and purchases increment stockVersion. Purchases append stock movements and PURCHASE product logs.
 
 ### Verification
 

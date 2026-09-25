@@ -4,6 +4,8 @@ import {auth, requireAuth, requireAdmin} from "./auth.ts";
 
 import {products, adminProducts, productErrorHandler} from "./products.ts";
 
+import { commerce, commerceErrorHandler } from "./commerce.ts";
+
 const app: Express = express();
 app.disable("x-powered-by");
 app.use(express.json({limit: "16kb"}));
@@ -19,6 +21,8 @@ app.use("/api", requireAuth, (_request, response, next) => {
 });
 app.use("/api/admin", requireAdmin, adminProducts);
 app.use("/api", products);
+app.use("/api", commerce);
+app.use(commerceErrorHandler);
 app.use(productErrorHandler);
 app.use((_request, response) => {
     response
