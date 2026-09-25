@@ -66,7 +66,6 @@ async function input(user: Account) {
         version: c.version,
         requestId: randomUUID(),
         items: c.items
-            .filter((i: { available: boolean }) => i.available)
             .map(
                 (i: {
                     productId: string;
@@ -145,7 +144,7 @@ test("database cart, ownership, validation, stale version and unavailable items"
     assert.equal((await cart(a)).items.length, 0);
 });
 
-test("checkout skips known unavailable items, preserves snapshots, logs and private order history", async () => {
+test("checkout requires resolving unavailable items, preserves snapshots, logs and private order history", async () => {
     const a = await account(),
         b = await account(),
         p = await product(),
@@ -156,6 +155,12 @@ test("checkout skips known unavailable items, preserves snapshots, logs and priv
         where: { id: unavailable.id },
         data: { stock: 0 },
     });
+    const blocked = await input(a);
+    assert.equal(blocked.items.length, 2);
+    await a.agent.post("/api/checkout").send(blocked).expect(409);
+    await a.agent.post("/api/checkout").send({...blocked, items: blocked.items.filter((i: {productId: string}) => i.productId === p.id)}).expect(409);
+    assert.equal((await cart(a)).items.length, 2);
+    await a.agent.delete(`/api/cart/items/${unavailable.id}`).send({version: blocked.version}).expect(200);
     const body = await input(a);
     assert.equal(body.items.length, 1);
     const order = (await a.agent.post("/api/checkout").send(body).expect(201))
@@ -174,7 +179,7 @@ test("checkout skips known unavailable items, preserves snapshots, logs and priv
     );
     assert.deepEqual(
         (await cart(a)).items.map((i: { productId: string }) => i.productId),
-        [unavailable.id],
+        [],
     );
     const movement = await db.stockMovement.findFirstOrThrow({
         where: { productId: p.id },
@@ -436,26 +441,26 @@ test("checkout rejects forged lines, duplicate products, changed cart, prices an
     await add(a, p.id, 100);
     await add(a, q.id, 100);
     const body = await input(a);
-    await a.agent
-        .post("/api/checkout")
-        .send({ ...body, items: [body.items[0], body.items[0]] })
-        .expect(400);
-    await a.agent
-        .post("/api/checkout")
-        .send({
+    const duplicate = await a.agent.post("/api/checkout")
+        .send({ ...body, items: [body.items[0], body.items[0]] }).expect(400);
+    assert.equal(duplicate.body.error, "VALIDATION_ERROR");
+    for (const [change, code] of [
+        [{ productId: randomUUID() }, "CART_CHANGED"],
+        [{ quantity: 99 }, "CART_CHANGED"],
+        [{ priceCents: 1 }, "PRICE_CHANGED"],
+    ] as const) {
+        const response = await a.agent.post("/api/checkout").send({
             ...body,
-            items: [{ ...body.items[0], productId: randomUUID() }],
-        })
-        .expect(409);
-    await a.agent
-        .post("/api/checkout")
-        .send({ ...body, items: [{ ...body.items[0], quantity: 99 }] })
-        .expect(409);
-    await a.agent
-        .post("/api/checkout")
-        .send({ ...body, items: [{ ...body.items[0], priceCents: 1 }] })
-        .expect(409);
-    await a.agent.post("/api/checkout").send(body).expect(400);
+            items: body.items.map((item: {productId: string; quantity: number; priceCents: number}, index: number) =>
+                index === 0 ? { ...item, ...change } : item),
+        }).expect(409);
+        assert.equal(response.body.error, code);
+    }
+    const subset = await a.agent.post("/api/checkout")
+        .send({...body, items: [body.items[0]]}).expect(409);
+    assert.equal(subset.body.error, "CART_CHANGED");
+    const overflow = await a.agent.post("/api/checkout").send(body).expect(400);
+    assert.equal(overflow.body.error, "ORDER_LIMIT");
     assert.equal(
         (await db.product.findUniqueOrThrow({ where: { id: p.id } })).stock,
         100,
@@ -560,4 +565,77 @@ test("order history is paginated deterministically and database stock constraint
         (await db.product.findUniqueOrThrow({ where: { id: p.id } })).stock,
         5,
     );
+});
+
+
+test("unavailable cart entries block full checkout and forged subsets without side effects", async () => {
+    for (const change of [{stock: 0}, {stock: 1}, {deletedAt: new Date()}]) {
+        const user = await account();
+        const good = await product(), bad = await product();
+        await add(user, good.id);
+        await add(user, bad.id, 2);
+        await db.product.update({where: {id: bad.id}, data: change});
+        const before = await cart(user);
+        const body = await input(user);
+        await user.agent.post("/api/checkout").send(body).expect(409);
+        await user.agent.post("/api/checkout").send({...body, items: body.items.filter((i: {productId: string}) => i.productId === good.id)}).expect(409);
+        assert.deepEqual(await cart(user), before);
+        assert.equal((await db.product.findUniqueOrThrow({where: {id: good.id}})).stock, 5);
+        assert.equal(await db.order.count({where: {userId: user.id}}), 0);
+        assert.equal(await db.stockMovement.count({where: {productId: good.id}}), 0);
+        assert.equal(await db.productLog.count({where: {productId: good.id}}), 0);
+    }
+});
+
+test("customer-only purchasing and admin read-only paginated all-order access", async () => {
+    const customer = await account(), other = await account(), admin = await account(true);
+    const p = await product();
+    await add(customer, p.id);
+    const body = await input(customer);
+    for (const path of ["/api/cart", "/api/orders", "/api/orders/" + randomUUID()]) {
+        await admin.agent.get(path).expect(403);
+        await request(app).get(path).expect(401);
+    }
+    await admin.agent.post("/api/checkout").send(body).expect(403);
+    await admin.agent.post("/api/cart/items").send({productId: p.id, quantity: 1, version: 0}).expect(403);
+    await admin.agent.patch(`/api/cart/items/${p.id}`).send({quantity: 1, version: 0}).expect(403);
+    await admin.agent.delete(`/api/cart/items/${p.id}`).send({version: 0}).expect(403);
+    assert.equal((await db.product.findUniqueOrThrow({where: {id: p.id}})).stock, 5);
+    const receipt = (await customer.agent.post("/api/checkout").send(body).expect(201)).body.data;
+    // Replay must work even after the current cart changes and contains a now-unavailable product.
+    await add(customer, p.id);
+    await db.product.update({where: {id: p.id}, data: {stock: 0}});
+    const replay = (await customer.agent.post("/api/checkout").send(body).expect(200)).body.data;
+    assert.equal(replay.id, receipt.id);
+    assert.equal((await cart(customer)).items.length, 1);
+    await other.agent.get(`/api/orders/${receipt.id}`).expect(404);
+    for (const path of ["/api/admin/orders", `/api/admin/orders/${receipt.id}`]) {
+        await request(app).get(path).expect(401);
+        await customer.agent.get(path).expect(403);
+    }
+    const email = (await db.user.findUniqueOrThrow({where: {id: customer.id}})).email;
+    const detail = (await admin.agent.get(`/api/admin/orders/${receipt.id}`).expect(200)).body.data;
+    assert.deepEqual(detail, {...receipt, customerEmail: email});
+    assert.equal(detail.requestHash, undefined);
+    await admin.agent.get(`/api/admin/orders/${randomUUID()}`).expect(404);
+    await admin.agent.get("/api/admin/orders?page=0").expect(400);
+    // Include a legacy admin-owned order: USER must not see it through either endpoint.
+    const legacy = await db.order.create({data: {userId: admin.id, totalAmountCents: 1200}});
+    await customer.agent.get(`/api/orders/${legacy.id}`).expect(404);
+    await customer.agent.get(`/api/admin/orders/${legacy.id}`).expect(403);
+    await db.order.createMany({data: Array.from({length: 21}, () => ({userId: other.id, totalAmountCents: 1200}))});
+    const expected = await db.order.findMany({orderBy: [{createdAt: "desc"}, {id: "desc"}]});
+    const all: string[] = [];
+    for (let page = 1; all.length < expected.length; page++) {
+        const result = (await admin.agent.get(`/api/admin/orders?page=${page}`).expect(200)).body.data;
+        assert.equal(result.total, expected.length);
+        assert.equal(result.page, page);
+        assert.equal(result.pageSize, 20);
+        assert.equal(result.items.length, Math.min(20, expected.length - all.length));
+        assert.ok(result.items.every((i: {customerEmail: string}) => i.customerEmail));
+        all.push(...result.items.map((i: {id: string}) => i.id));
+    }
+    assert.deepEqual(all, expected.map(i => i.id));
+    await admin.agent.patch(`/api/admin/orders/${receipt.id}`).send({totalAmountCents: 1}).expect(404);
+    await admin.agent.delete(`/api/admin/orders/${receipt.id}`).expect(404);
 });

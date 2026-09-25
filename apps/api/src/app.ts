@@ -4,7 +4,7 @@ import {auth, requireAuth, requireAdmin} from "./auth.ts";
 
 import {products, adminProducts, productErrorHandler} from "./products.ts";
 
-import { commerce, commerceErrorHandler } from "./commerce.ts";
+import { commerce, adminOrders, commerceErrorHandler } from "./commerce.ts";
 
 const app: Express = express();
 app.disable("x-powered-by");
@@ -14,13 +14,13 @@ app.get("/api/health", (_request, response) => {
     response.json({data: {status: "ok"}});
 });
 app.use("/api/auth", auth);
-// Every business API requires a session. Mount future routes below these guards.
-app.use("/api", requireAuth, (_request, response, next) => {
+app.use("/api", (_request, response, next) => {
     response.set("Cache-Control", "no-store");
     next();
 });
-app.use("/api/admin", requireAdmin, adminProducts);
 app.use("/api", products);
+app.use("/api", requireAuth);
+app.use("/api/admin", requireAdmin, adminProducts, adminOrders);
 app.use("/api", commerce);
 app.use(commerceErrorHandler);
 app.use(productErrorHandler);

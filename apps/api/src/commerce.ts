@@ -2,6 +2,7 @@ import { Router, type ErrorRequestHandler } from "express";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { db } from "./db.ts";
+import { requireUser } from "./auth.ts";
 import type { Prisma } from "./generated/prisma/client.ts";
 
 type Tx = Prisma.TransactionClient;
@@ -107,11 +108,11 @@ async function cartView(tx: Tx, userId: string, cartVersion: number) {
         version: cartVersion,
         items,
         totalAmountCents: items
-            .filter((i) => i.available)
             .reduce((n, i) => n + i.priceCents * i.quantity, 0),
     };
 }
 export const commerce = Router();
+commerce.use(["/cart", "/checkout", "/orders"], requireUser);
 commerce.get("/cart", async (_req, res) => {
     const userId = res.locals.user.id;
     const cart = await db.$transaction(async (tx) => {
@@ -249,6 +250,8 @@ commerce.post("/checkout", async (req, res) => {
             const cartItems = await tx.cartItem.findMany({
                 where: { userId: actor.id },
             });
+            if (cartItems.length !== items.length)
+                fail(409, "CART_CHANGED", "Checkout must include your entire cart. Resolve unavailable items and review your cart.");
             for (const item of items) {
                 if (
                     !cartItems.some(
@@ -400,6 +403,31 @@ commerce.get("/orders/:id", async (req, res) => {
     });
     if (!order) fail(404, "ORDER_NOT_FOUND", "Order not found.");
     res.json({ data: receipt(order) });
+});
+export const adminOrders = Router();
+const adminOrderInclude = { ...orderInclude, user: { select: { email: true } } };
+function adminReceipt(order: Prisma.OrderGetPayload<{ include: typeof adminOrderInclude }>) {
+    const { user, ...rest } = order;
+    return { ...receipt(rest), customerEmail: user.email };
+}
+adminOrders.get("/orders", async (req, res) => {
+    const page = z.coerce.number().int().min(1).max(100000).default(1).parse(req.query.page);
+    const [orders, total] = await db.$transaction([
+        db.order.findMany({
+            include: adminOrderInclude,
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            skip: (page - 1) * 20,
+            take: 20,
+        }),
+        db.order.count(),
+    ]);
+    res.json({ data: { items: orders.map(adminReceipt), total, page, pageSize: 20 } });
+});
+adminOrders.get("/orders/:id", async (req, res) => {
+    const id = uuid.parse(req.params.id);
+    const order = await db.order.findUnique({ where: { id }, include: adminOrderInclude });
+    if (!order) fail(404, "ORDER_NOT_FOUND", "Order not found.");
+    res.json({ data: adminReceipt(order) });
 });
 export const commerceErrorHandler: ErrorRequestHandler = (
     error,

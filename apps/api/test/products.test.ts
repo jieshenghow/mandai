@@ -175,6 +175,7 @@ test("images: decoding, limits, ownership, cover/order, removal and temporary cl
     });
     assert.equal(p.coverImageId, second.id);
     await member.agent.get(first.url).expect(200);
+    await request(app).get(first.url).expect(200).expect("Content-Type", /webp/);
     await admin.agent
         .post("/api/admin/products")
         .send({ ...base, imageIds: [first.id] })
@@ -204,6 +205,8 @@ test("images: decoding, limits, ownership, cover/order, removal and temporary cl
         .send({ imageIds: [second.id] })
         .expect(200);
     assert.equal(removed.body.data.coverImageId, second.id);
+    await request(app).get(first.url).expect(401);
+    await member.agent.get(first.url).expect(404);
     const image = await db.productImage.update({
         where: { id: first.id },
         data: { createdAt: new Date(Date.now() - 25 * 3600000) },
@@ -317,4 +320,27 @@ test("audit failure rolls back product, stock and movement; pagination and filte
         .get("/api/admin/product-logs?from=2100-01-01T00%3A00%3A00.000Z")
         .expect(200);
     assert.equal(future.body.data.total, 0);
+});
+
+
+test("guest catalog includes sold-out products, excludes archives and keeps private APIs private", async () => {
+    const active = await create({stock: 0});
+    const archived = await create();
+    await admin.agent.delete(`/api/admin/products/${archived.id}`).expect(200);
+    const list = (await request(app).get("/api/products").expect(200)).body.data;
+    assert.ok(list.some((p: {id: string; stock: number}) => p.id === active.id && p.stock === 0));
+    assert.ok(!list.some((p: {id: string}) => p.id === archived.id));
+    await request(app).get(`/api/products/${active.id}`).expect(200);
+    await request(app).get(`/api/products/${archived.id}`).expect(404);
+    for (const path of ["/api/cart", "/api/orders", "/api/admin/products", "/api/admin/orders", "/api/admin/product-logs"])
+        await request(app).get(path).expect(401);
+    await request(app).post("/api/checkout").send({}).expect(401);
+    await request(app).post("/api/admin/products").send(base).expect(401);
+    const image = await upload();
+    const pictured = await create({imageIds: [image.id]});
+    await request(app).get(image.url).expect(200);
+    await admin.agent.delete(`/api/admin/products/${pictured.id}`).expect(200);
+    await request(app).get(image.url).expect(404);
+    await admin.agent.patch(`/api/admin/products/${pictured.id}`).send({name: "Return"}).expect(404);
+    await admin.agent.post(`/api/admin/products/${pictured.id}/stock-movements`).send({type: "IN", quantity: 1, reason: "Restock"}).expect(404);
 });

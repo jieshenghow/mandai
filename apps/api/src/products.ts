@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requireAuth } from "./auth.ts";
 import multer from "multer";
 import sharp from "sharp";
 import { randomUUID } from "node:crypto";
@@ -183,12 +184,17 @@ products.get("/product-images/:id", async (req, res, next) => {
         where: { id },
         include: { product: true },
     });
+    // Public files must belong to an active product. Unattached uploads stay private.
+    if (image && !image.productId && !res.locals.user) {
+        await requireAuth(req, res, () => {});
+        if (!res.locals.user) return;
+    }
     const actor = res.locals.user;
     if (
         !image ||
         (image.productId
             ? image.product?.deletedAt !== null
-            : actor.role !== "ADMIN" || image.uploaderId !== actor.id)
+            : actor?.role !== "ADMIN" || image.uploaderId !== actor?.id)
     )
         fail(404, "IMAGE_NOT_FOUND", "Image not found.");
     res.set({

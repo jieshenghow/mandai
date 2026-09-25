@@ -84,6 +84,13 @@ export const requireAdmin: RequestHandler = (_request, response, next) => {
     }
     next();
 };
+export const requireUser: RequestHandler = (_request, response, next) => {
+    if (response.locals.user?.role !== "USER") {
+        response.status(403).json({error: "FORBIDDEN", message: "Customer access required."});
+        return;
+    }
+    next();
+};
 export const auth = Router();
 auth.use((_req, res, next) => {
     res.set("Cache-Control", "no-store");
